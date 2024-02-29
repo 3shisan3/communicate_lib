@@ -26,7 +26,7 @@ Version history
 
 extern std::string g_saveFileDir;
 
-namespace ota
+namespace communicate
 {
 
 // 存入读取，使用sizeof需要明确结构体大小，std::string 不符合

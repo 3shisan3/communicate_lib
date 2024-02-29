@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-namespace ota
+namespace communicate
 {
 
 const std::string MultipartParser::boundary_prefix_("----CppRestSdkClient");

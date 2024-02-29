@@ -41,7 +41,7 @@ add_custom_command(
 	TARGET LINK_HEADERS PRE_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/interface/*/*.h ${SHARED_ROOT_DIR}/include
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/source/*/*.json ${SHARED_ROOT_DIR}/config
-	DEPENDS ${PROJECT_SOURCE_DIR}/sdk/include AND ${SHARED_ROOT_DIR}/config
+	DEPENDS ${SHARED_ROOT_DIR}/include AND ${SHARED_ROOT_DIR}/config
 )
 
 # 查找OpenSSL库
@@ -68,7 +68,10 @@ foreach(subproject ${SUBMOUDLES_DIR_LIST})
 		list(REMOVE_ITEM SOURCES "${subSource}")
 	endforeach()
 endforeach()
-# message(STATUS "SOURCES: ${SOURCES}")
+# 临时单独去除websocket相关的编译
+file(GLOB_RECURSE subSources "${PROJECT_SOURCE_DIR}/src/common/communicateViaWebSocket/*.cpp")
+list(REMOVE_ITEM SOURCES ${subSources})
+message(STATUS "SOURCES: ${SOURCES}")
 
 # 设置排除链接编译的目录（混在主目录下的子目录）
 # add_subdirectory(${PROJECT_SOURCE_DIR}/src/interface/dpi_ota EXCLUDE_FROM_ALL)

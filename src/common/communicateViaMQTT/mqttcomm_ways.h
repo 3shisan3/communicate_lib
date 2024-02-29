@@ -20,7 +20,7 @@ Version history
 
 #include "instance_manager/mqttclient_instances.h"
 
-namespace ota
+namespace communicate
 {
 
 enum MQTT_ERROR_CODE

@@ -21,7 +21,7 @@ Version history
 #include <tuple>
 #include <vector>
 
-namespace ota
+namespace communicate
 {
 
 struct ChunkFileInfo

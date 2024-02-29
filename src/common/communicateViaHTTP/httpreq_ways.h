@@ -30,7 +30,7 @@ Version history
 #include "multipart_parser.h"
 #include "logconfig.h"
 
-namespace ota
+namespace communicate
 {
 
 struct CommContext

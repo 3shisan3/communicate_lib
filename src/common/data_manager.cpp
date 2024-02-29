@@ -5,7 +5,7 @@
 
 std::string g_saveFileDir = "./temporary_cache/";
 
-namespace ota
+namespace communicate
 {
 
 const std::string saveResumeFileDir = g_saveFileDir + "resume_note/";

@@ -13,7 +13,7 @@
 
 // const std::string def_resp = "Too many replies, cancel printing";
 
-namespace ota
+namespace communicate
 {
 
 WFHttpTask *SpecialSupReq::getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo, const json_object_t *headerInfo)

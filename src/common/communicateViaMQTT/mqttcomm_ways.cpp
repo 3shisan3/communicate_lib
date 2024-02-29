@@ -1,6 +1,6 @@
 #include "mqttcomm_ways.h"
 
-namespace ota
+namespace communicate
 {
 
 MQTT_ERROR_CODE MqttCommWays::subMqttTopic(std::string& result, const ConnectInfo& addr, const TopicInfo& topic)

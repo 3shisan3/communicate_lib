@@ -5,7 +5,7 @@
 #define REDIRECT_MAX    5
 #define RETRY_MAX       2
 
-namespace ota
+namespace communicate
 {
 
 WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo, const char *methodType)

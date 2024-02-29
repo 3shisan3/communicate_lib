@@ -23,7 +23,7 @@ Version history
 #include "httpreq_ways.h"
 #include "multipart_parser.h"
 
-namespace ota
+namespace communicate
 {
 
 class SpecialSupReq : HttpReqWays
