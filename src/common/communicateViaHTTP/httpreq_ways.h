@@ -27,9 +27,10 @@ Version history
 #include <WFTaskFactory.h>
 #include <WFFacilities.h>
 
+#include "multipart_parser.h"
+
 namespace communicate
 {
-class MultipartParser;
 
 struct CommContext
 {
