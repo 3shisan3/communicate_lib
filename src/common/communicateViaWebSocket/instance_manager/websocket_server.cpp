@@ -63,7 +63,7 @@ bool WebSocketServer::registerServer(unsigned short port, const char *cert_file,
         ret = server.start(port);
     }
 
-    auto res = m_servers.insert({port, nullptr});
+    auto res = m_servers.insert({port, &server});
     return ret == 0 && res.second;
 }
 

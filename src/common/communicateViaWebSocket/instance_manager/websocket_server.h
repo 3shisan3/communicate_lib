@@ -58,7 +58,7 @@ private:
 
     static void defTextProcessDealFn(WebSocketChannel *ws, protocol::WebSocketFrame *in);
     // todo WFWebSocketServer 替换为继承后自定义类型，用智能指针来管理
-    std::map<unsigned short, void *> m_servers;  // key-port, value-WFWebSocketServer
+    std::map<unsigned short, WFWebSocketServer *> m_servers;  // key-port, value-WFWebSocketServer
 };
 
 }
