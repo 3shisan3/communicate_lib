@@ -1,5 +1,7 @@
 #include "mqttcomm_ways.h"
 
+#include "instance_manager/mqttclient_instances.h"
+
 namespace communicate
 {
 

@@ -18,8 +18,6 @@ Version history
 
 #include <string>
 
-#include "instance_manager/mqttclient_instances.h"
-
 namespace communicate
 {
 
