@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019 Sogou, Inc.
+  Copyright (c) 2021 Sogou, Inc.
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.
@@ -16,23 +16,22 @@
   Author: Xie Han (xiehan@sogou-inc.com)
 */
 
-#ifndef _COMMREQUEST_H_
-#define _COMMREQUEST_H_
+#ifndef _TRANSREQUEST_H_
+#define _TRANSREQUEST_H_
 
-#include <errno.h>
-#include <stddef.h>
 #include "SubTask.h"
 #include "Communicator.h"
 #include "CommScheduler.h"
 
-class CommRequest : public SubTask, public CommSession
+class ChanRequest : public SubTask, public CommChannel
 {
 public:
-	CommRequest(CommSchedObject *object, CommScheduler *scheduler)
+	ChanRequest(CommSchedObject *object, CommScheduler *scheduler)
 	{
 		this->scheduler = scheduler;
 		this->object = object;
 		this->wait_timeout = 0;
+		this->established = 0;
 	}
 
 	CommSchedObject *get_request_object() const { return this->object; }
@@ -41,14 +40,7 @@ public:
 	void set_wait_timeout(int timeout) { this->wait_timeout = timeout; }
 
 public:
-	virtual void dispatch()
-	{
-		if (this->scheduler->request(this, this->object, this->wait_timeout,
-									 &this->target) < 0)
-		{
-			this->handle(CS_STATE_ERROR, errno);
-		}
-	}
+	virtual void dispatch();
 
 protected:
 	int state;
@@ -56,19 +48,61 @@ protected:
 
 protected:
 	CommTarget *target;
-#define TOR_NOT_TIMEOUT			0
-#define TOR_WAIT_TIMEOUT		1
-#define TOR_CONNECT_TIMEOUT		2
-#define TOR_TRANSMIT_TIMEOUT	3
-	int timeout_reason;
 
 protected:
+	int established;
 	int wait_timeout;
 	CommSchedObject *object;
 	CommScheduler *scheduler;
 
 protected:
-	virtual void handle(int state, int error);
+	virtual void handle_established()
+	{
+		this->state = CS_STATE_SUCCESS;
+		this->error = 0;
+		this->established = 1;
+		this->subtask_done();
+	}
+
+	virtual void handle(int state, int error)
+	{
+		this->state = state;
+		this->error = error;
+		this->established = 0;
+		this->subtask_done();
+	}
+};
+
+class TransRequest : public SubTask, public TransSession
+{
+public:
+	TransRequest(CommChannel *channel, CommScheduler *scheduler)
+	{
+		this->scheduler = scheduler;
+		this->channel = channel;
+	}
+
+	CommChannel *get_request_channel() const { return this->channel; }
+	void set_request_channel(CommChannel *channel) { this->channel = channel; }
+
+public:
+	virtual void dispatch();
+
+protected:
+	int state;
+	int error;
+
+protected:
+	CommChannel *channel;
+	CommScheduler *scheduler;
+
+protected:
+	virtual void handle(int state, int error)
+	{
+		this->state = state;
+		this->error = error;
+		this->subtask_done();
+	}
 };
 
 #endif
