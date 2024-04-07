@@ -36,6 +36,8 @@ struct ConnectInfo
     std::string host = "localhost"; // 要连接的代理的主机名或 IP 地址
     int port = 1883;                // 要连接的网络端口, mqtt通常是 1883
     int keepalive = 60;             // 如果在这段时间内（秒数）没有交换其他消息，代理应该向客户端发送 PING 消息
+    const char *username = nullptr;
+    const char *password = nullptr;
 };
 
 struct TopicInfo
@@ -49,6 +51,9 @@ struct TopicInfo
 class MqttCommWays
 {
 public:
+    // 初始化基础的配置信息(当前只设置客户端id)
+    static void initMqttData(const std::string &clientID);
+    
     /**
      * @brief 订阅接口, 外部拉线程循环获取result处理
      *

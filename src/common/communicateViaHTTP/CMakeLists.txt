@@ -35,8 +35,8 @@ target_link_libraries(${PROJECT_NAME} ${ROOT_PROJ_DIR}/thirdparty/lib/libworkflo
 
 # 将对外输出文件导出
 if (EXPOSE_SUBMODULES)
-	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/httpreq_ways.h DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/project/${PROJECT_NAME}/include)
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/httpreq_ways.h DESTINATION ${ROOT_BUILD_DIR}/project/${PROJECT_NAME}/include)
 	install(TARGETS ${PROJECT_NAME} 
-		LIBRARY DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/project/${PROJECT_NAME}/lib
-		ARCHIVE DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/project/${PROJECT_NAME}/static_lib)
+		LIBRARY DESTINATION ${ROOT_BUILD_DIR}/project/${PROJECT_NAME}/lib
+		ARCHIVE DESTINATION ${ROOT_BUILD_DIR}/project/${PROJECT_NAME}/static_lib)
 endif()

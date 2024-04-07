@@ -24,6 +24,7 @@ Version history
 #include <mosquittopp.h>
 
 // mqtt中需要的全局变量
+extern std::string g_clientId;
 
 // 继承enable_shared_from_this核心是保证类内和外部使用同块内存，共用计数器（保证智能指针内部计数器唯一性）
 class MqttClient : public mosqpp::mosquittopp, public std::enable_shared_from_this<MqttClient>

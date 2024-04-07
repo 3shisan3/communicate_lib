@@ -124,7 +124,7 @@ bool MqttClientIns::toConnectBroker(const char *host, int port, int keepalive)
         return true;
     }
 
-    std::shared_ptr<MqttClient> newClient = std::make_shared<MqttClient>();
+    std::shared_ptr<MqttClient> newClient = g_clientId.empty() ? std::make_shared<MqttClient>() : std::make_shared<MqttClient>(g_clientId.c_str());
     int status = newClient->connect(host, port, keepalive);
     {
         std::lock_guard<std::mutex> lock(newClient->m_mutex);

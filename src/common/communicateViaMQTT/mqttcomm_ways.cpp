@@ -5,6 +5,11 @@
 namespace communicate
 {
 
+void MqttCommWays::initMqttData(const std::string &clientID)
+{
+	g_clientId = clientID;
+}
+
 MQTT_ERROR_CODE MqttCommWays::subMqttTopic(std::string& result, const ConnectInfo& addr, const TopicInfo& topic)
 {
 	auto ins = MqttClientIns::getInstance();
