@@ -4,7 +4,22 @@ cmake_minimum_required(VERSION 3.10)
 # 设置项目名称  
 project(communicate_lib)
 
-set(CMAKE_INSTALL_PREFIX "~/program_running/ota_by_workflow")
+# 判断操作系统类型  
+if(UNIX)  
+    # 在 Unix-like 系统中使用 $HOME 环境变量  
+    execute_process(COMMAND sh -c "echo $HOME" OUTPUT_VARIABLE USER_HOME_DIR)  
+    string(STRIP ${USER_HOME_DIR} USER_HOME_DIR)  
+elseif(WIN32)  
+    # 在 Windows 中使用 %USERPROFILE% 环境变量  
+    execute_process(COMMAND cmd /C "echo %USERPROFILE%" OUTPUT_VARIABLE USER_HOME_DIR)  
+    string(STRIP ${USER_HOME_DIR} USER_HOME_DIR)  
+    # 将反斜杠替换为正斜杠（可选，但可以使路径更易于处理）  
+    string(REPLACE "\\" "/" USER_HOME_DIR ${USER_HOME_DIR})  
+endif() 
+
+set(CMAKE_INSTALL_PREFIX "${USER_HOME_DIR}/program_running/${PROJECT_NAME}")
+# 复制库到安装目录的third_lib子目录  
+set(INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/third_lib")  
 
 # 设置构建选项前提
 option(BUILD_TEST "build test proj option"	ON)
@@ -43,9 +58,33 @@ add_custom_command(
 	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/source/*/*.json ${SHARED_ROOT_DIR}/config
 	DEPENDS ${SHARED_ROOT_DIR}/include AND ${SHARED_ROOT_DIR}/config
 )
+# 添加自定义安装命令，复制库文件  
+function(copy_system_libs target_dir origin_list)  
+	set(COPY_STAMP_FILES "")
+    foreach(lib ${origin_list})  
+        # 构建目标文件的完整路径  
+        get_filename_component(lib_name "${lib}" NAME)  
+        set(target_file "${target_dir}/${lib_name}")  
+          
+        # 添加自定义命令来复制单个库文件  
+        add_custom_command(  
+            OUTPUT ${CMAKE_BINARY_DIR}/install_libs_${lib_name}.stamp  
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${lib}" "${target_file}"  
+            COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/install_libs_${lib_name}.stamp  
+            COMMENT "Copying ${lib_name} to install directory"  
+            VERBATIM  
+        )  
+          
+        # 将所有单个库文件的stamp文件添加到install_openssl_libs目标的依赖中  
+        list(APPEND COPY_STAMP_FILES ${CMAKE_BINARY_DIR}/install_libs_${lib_name}.stamp)  
+    endforeach()  
+      
+    # 创建一个自定义目标，它依赖于所有单个库文件的stamp文件  
+    add_custom_target(install_libs ALL DEPENDS ${COPY_STAMP_FILES})  
+endfunction()  
 
 # 查找OpenSSL库
-# find_package(OpenSSL REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # 子模块库存储
 list(APPEND SUBMOUDLES_DIR_LIST
@@ -84,7 +123,7 @@ include_directories(${PROJECT_SOURCE_DIR}/src
 
 
 # 指定了在安装目标库时，库的运行时依赖项应该被安装到哪个目录
-set(CMAKE_INSTALL_RPATH "$ORIGIN")
+# set(CMAKE_INSTALL_RPATH "$ORIGIN")
 # 设置变量来禁用构建目标库时生成运行时搜索路径,与上变量互斥
 # set(CMAKE_SKIP_RPATH TRUE)
 # 生成动态库文件
@@ -96,20 +135,25 @@ target_sources(${PROJECT_NAME} PUBLIC ${SubSources})
 set(DEPENDENCY_LIB "")
 
 # 添加条件需要链接的库文件 
-# if(OpenSSL_FOUND)
-#     message(STATUS "OpenSSL found")
-# 	include_directories(${OPENSSL_INCLUDE_DIR})
-#	list(APPEND DEPENDENCY_LIB ${OPENSSL_LIBRARIES})
-# 	target_link_libraries(${PROJECT_NAME} ${OPENSSL_LIBRARIES})
-# else()
-#     message(STATUS "OpenSSL not found")
+if(OpenSSL_FOUND)
+    message(STATUS "OpenSSL found")
+	include_directories(${OPENSSL_INCLUDE_DIR}) 
+	target_link_libraries(${PROJECT_NAME} ${OPENSSL_LIBRARIES})
+
+	# list(APPEND DEPENDENCY_LIB ${OPENSSL_LIBRARIES})
+
+	# 自定义安装命令，复制库文件  
+	copy_system_libs("${INSTALL_LIB_DIR}" "${OPENSSL_LIBRARIES}")
+else()
+    message(STATUS "OpenSSL not found")
 	include_directories(${PROJECT_SOURCE_DIR}/thirdparty/include/openssl_3)
+	target_link_libraries(${PROJECT_NAME} ${DEPENDENCY_LIB})
+
 	list(APPEND DEPENDENCY_LIB
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lib/libssl.so.3
 		${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lib/libcrypto.so.3
 	)
-	target_link_libraries(${PROJECT_NAME} ${DEPENDENCY_LIB})
-# endif()
+endif()
 
 # 添加动态库的搜索路径
 # link_directories(${CMAKE_CURRENT_SOURCE_DIR}/sdk/lib)
@@ -134,8 +178,11 @@ if (ROOT_PROJ_DIR)
 endif()
 
 # 将对外输出文件导出
-install(DIRECTORY ${SHARED_ROOT_DIR}/ DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/project/${PROJECT_NAME})
-install(FILES ${DEPENDENCY_LIB} DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/project/third_lib)
+install(DIRECTORY ${SHARED_ROOT_DIR}/ DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(FILES ${DEPENDENCY_LIB} DESTINATION ${CMAKE_INSTALL_PREFIX}/third_lib)
+# 确保在make install时运行自定义安装命令  
+install(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} --build . --target install_libs)")
+
 
 # 设置RPATH, 确保运行时可以找到依赖库
 set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/third_lib;$ORIGIN/../third_lib")
