@@ -32,6 +32,8 @@ class MqttClient : public mosqpp::mosquittopp, public std::enable_shared_from_th
 public:
     friend class MqttClientIns;
 
+    MqttClient(const char *name = nullptr) : mosqpp::mosquittopp(name) {};
+
     std::shared_ptr<MqttClient> getPtr()
     {
         return shared_from_this();

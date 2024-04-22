@@ -5,6 +5,7 @@
 
 #include "logconfig.h"
 
+std::string g_clientId = "";
 
 void MqttClient::on_connect(int rc)
 {
