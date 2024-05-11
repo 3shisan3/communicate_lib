@@ -13,7 +13,7 @@ void MqttCommWays::initMqttData(const std::string &clientID)
 MQTT_ERROR_CODE MqttCommWays::subMqttTopic(std::string& result, const ConnectInfo& addr, const TopicInfo& topic)
 {
 	auto ins = MqttClientIns::getInstance();
-	if (!ins->toConnectBroker(addr.host.c_str(), addr.port, addr.port))
+	if (!ins->toConnectBroker(addr.host.c_str(), addr.port, addr.keepalive))
 	{
 		return MQTT_ERROR_CODE::CONNECT_FAILED;
 	}
@@ -30,7 +30,7 @@ MQTT_ERROR_CODE MqttCommWays::subMqttTopic(std::string& result, const ConnectInf
 MQTT_ERROR_CODE MqttCommWays::pubMqttTopicMsg(const ConnectInfo& addr, const TopicInfo& topic, const std::string& msgContent)
 {
 	auto ins = MqttClientIns::getInstance();
-	if (!ins->toConnectBroker(addr.host.c_str(), addr.port, addr.port))
+	if (!ins->toConnectBroker(addr.host.c_str(), addr.port, addr.keepalive))
 	{
 		return MQTT_ERROR_CODE::CONNECT_FAILED;
 	}
@@ -65,6 +65,22 @@ MQTT_ERROR_CODE MqttCommWays::disconnectMqttBroker(const ConnectInfo& addr)
 	}
 
 	return MQTT_ERROR_CODE::SUCCESS;
+}
+
+bool MqttCommWays::setClientRecCfg(const ConnectInfo& addr, const ReconnectCfg &cfg)
+{
+	auto ins = MqttClientIns::getInstance();
+	if (!ins->toConnectBroker(addr.host.c_str(), addr.port, addr.keepalive))
+	{
+		return false;
+	}
+	std::string brokerAddr = addr.host + ":" + std::to_string(addr.port);
+	if (!ins->setReconnectCfg(brokerAddr, cfg.interval_time, cfg.interval_time_max, cfg.growthIntervval_add))
+	{
+		return false;
+	}
+
+	return true;
 }
 
 }

@@ -48,10 +48,18 @@ struct TopicInfo
                                     // 2 只传输一次，确保消息只被接收一次）
 };
 
+// 默认是每间隔一秒重连一次
+struct ReconnectCfg
+{
+    uint interval_time = 1;         // 触发重连操作的基础时间间隔
+    uint interval_time_max = 30;    // 触发重连操作的最长时间间隔
+    bool growthIntervval_add = true;// true 时间间隔按上次间隔的两倍增长；false 固定增长基础时间间隔
+};
+
 class MqttCommWays
 {
 public:
-    // 初始化基础的配置信息(当前只设置客户端id)
+    // 初始化基础的配置信息(主要设置客户端id)
     static void initMqttData(const std::string &clientID);
     
     /**
@@ -94,6 +102,16 @@ public:
      * @return 状态码
      */
     static MQTT_ERROR_CODE disconnectMqttBroker(const ConnectInfo& addr);
+
+    /**
+     * @brief 设置指定客户端重连信息的配置
+     *
+     * @param[in] addr              订阅目标的网络地址信息
+     * @param[in] cfg               配置信息
+     *
+     * @return 状态码
+     */
+    static bool setClientRecCfg(const ConnectInfo& addr, const ReconnectCfg &cfg);
 
 };
 

@@ -32,7 +32,9 @@ class MqttClient : public mosqpp::mosquittopp, public std::enable_shared_from_th
 public:
     friend class MqttClientIns;
 
-    MqttClient(const char *name = nullptr) : mosqpp::mosquittopp(name) {};
+    MqttClient() : mosqpp::mosquittopp() {};
+    explicit MqttClient(const std::pair<std::string, bool> &baseInfo)
+        : mosqpp::mosquittopp(baseInfo.first.c_str(), baseInfo.second) {};
 
     std::shared_ptr<MqttClient> getPtr()
     {
@@ -111,10 +113,15 @@ public:
      */
     bool toDisconnectBroker(const std::string &brokerAddr);
 
+    /**
+     * @brief 设置指定客户端的重连机制
+     *
+     * @return 设置是否成功
+     */
+    bool setReconnectCfg(const std::string &brokerAddr, uint base_space, uint max_space, bool add_ways);
 
 private:
     MqttClientIns();
-
 
 private:
     std::map<std::string, std::shared_ptr<MqttClient>> m_mqttClientIns;  // key-broker_addr, value-mqttclient

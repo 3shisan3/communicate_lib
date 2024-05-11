@@ -98,7 +98,7 @@ MqttClientIns::MqttClientIns()
 MqttClientIns::~MqttClientIns()
 {
     // mosquittopp析构会自己调mosquitto_destroy
-    m_mqttClientIns.erase(m_mqttClientIns.begin(), m_mqttClientIns.end());  // erase才会调析构
+    m_mqttClientIns.clear();
     mosqpp::lib_cleanup();
 }
 
@@ -118,14 +118,16 @@ bool MqttClientIns::toConnectBroker(const char *host, int port, int keepalive)
         if (!iter->second->getClientUsability())
         {
             // 会有默认的重连操作
-            LOG_ERROR(stderr, "abnormal connection status with the broker, broker addr: %s\n", brokerAddr.c_str());
+            LOG_WARNING(stderr, "abnormal connection status with the broker, broker addr: %s\n", brokerAddr.c_str());
             // return iter->second->reconnect() == mosq_err_t::MOSQ_ERR_SUCCESS;
             return false;
         }
         return true;
     }
 
-    std::shared_ptr<MqttClient> newClient = g_clientId.empty() ? std::make_shared<MqttClient>() : std::make_shared<MqttClient>(g_clientId.c_str());
+    bool cleanSession = !g_clientId.empty();    // 目前封装逻辑cleanseesion为false无影响，但设置id后理论还是让broker保留信息较合理
+    std::pair<std::string, bool> clientBase = {g_clientId, cleanSession};
+    std::shared_ptr<MqttClient> newClient = clientBase.first.empty() ? std::make_shared<MqttClient>() : std::make_shared<MqttClient>(clientBase);
     int status = newClient->connect(host, port, keepalive);
     {
         std::lock_guard<std::mutex> lock(newClient->m_mutex);
@@ -213,4 +215,17 @@ bool MqttClientIns::toDisconnectBroker(const std::string &brokerAddr)
     res = res && (iter->second->loop_stop() == mosq_err_t::MOSQ_ERR_SUCCESS);
     res = res && m_mqttClientIns.erase(brokerAddr);   // erase 返回的是删除的数量
     return res;
+}
+
+bool MqttClientIns::setReconnectCfg(const std::string &brokerAddr, uint base_space, uint max_space, bool add_ways)
+{
+    auto iter = m_mqttClientIns.find(brokerAddr);
+    if (iter == m_mqttClientIns.end())
+    {
+        LOG_ERROR(stderr, "The client: %s, reconnect cfg to set failed\n", brokerAddr.c_str());
+        return false;
+    }
+
+    iter->second->reconnect_delay_set(base_space, max_space, add_ways);
+    return true;
 }
