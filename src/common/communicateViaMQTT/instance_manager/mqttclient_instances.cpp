@@ -112,7 +112,7 @@ bool MqttClientIns::toConnectBroker(const char *host, int port, int keepalive)
         // std::lock_guard<std::mutex> lock(iter->second->m_mutex);
         if (iter->second->m_clientStatus == MqttClient::client_status_code::CONNECTING)
         {
-            LOG_DEBUG(stderr, "wait loop sync time ~");
+            LOG_DEBUG(stderr, "wait loop sync time ~\n");
             std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待loop_start网络回调的操作，休眠1秒
         }
         if (!iter->second->getClientUsability())

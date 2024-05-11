@@ -13,8 +13,8 @@ Version history
 
 *****************************************************************/
 
-#ifndef _MQTTCOMM_WAYS_H_
-#define _MQTTCOMM_WAYS_H_
+#ifndef MQTTCOMM_WAYS_H
+#define MQTTCOMM_WAYS_H
 
 #include <string>
 

@@ -36,7 +36,7 @@ set(CMAKE_CXX_STANDARD 17)
 # 强制要求使用C++17标准   
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-# 对外输出主目录
+# 对外输出主目录(编译产出)
 set(SHARED_ROOT_DIR ${PROJECT_SOURCE_DIR}/sdk)
 # 指定编译输出的动态库路径
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${SHARED_ROOT_DIR}/lib)

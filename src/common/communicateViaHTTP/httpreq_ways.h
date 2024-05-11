@@ -13,8 +13,8 @@ Version history
 
 *****************************************************************/
 
-#ifndef _HTTPREQ_WAYS_H_
-#define _HTTPREQ_WAYS_H_
+#ifndef HTTPREQ_WAYS_H
+#define HTTPREQ_WAYS_H
 
 #include <netdb.h>
 #include <signal.h>
