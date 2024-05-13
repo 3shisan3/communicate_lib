@@ -17,9 +17,11 @@ elseif(WIN32)
     string(REPLACE "\\" "/" USER_HOME_DIR ${USER_HOME_DIR})  
 endif() 
 
-set(CMAKE_INSTALL_PREFIX "${USER_HOME_DIR}/program_running/${PROJECT_NAME}")
+set(CMAKE_INSTALL_PREFIX "/program_running/${PROJECT_NAME}")
 # 复制库到安装目录的third_lib子目录  
 set(INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/third_lib")  
+# 指定了在安装目标库时，库的运行时依赖项应该被安装到哪个目录
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
 
 # 设置构建选项前提
 option(BUILD_TEST "build test proj option"	ON)
@@ -135,9 +137,10 @@ target_sources(${PROJECT_NAME} PUBLIC ${SubSources})
 set(DEPENDENCY_LIB "")
 
 # 添加条件需要链接的库文件 
-if(OpenSSL_FOUND)
+if(!OpenSSL_FOUND)
     message(STATUS "OpenSSL found")
 	include_directories(${OPENSSL_INCLUDE_DIR}) 
+	message(STATUS "OPENSSL_INCLUDE_DIR: ${OPENSSL_INCLUDE_DIR}")
 	target_link_libraries(${PROJECT_NAME} ${OPENSSL_LIBRARIES})
 
 	# list(APPEND DEPENDENCY_LIB ${OPENSSL_LIBRARIES})
