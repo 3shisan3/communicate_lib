@@ -31,13 +31,15 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 	${ROOT_PROJ_DIR}/thirdparty/include/mosquitto)
 
 # 添加需要链接的库文件
-target_link_libraries(${PROJECT_NAME} ${ROOT_PROJ_DIR}/thirdparty/lib/libmosquitto.so.1
-									  ${ROOT_PROJ_DIR}/thirdparty/lib/libmosquittopp.so.1)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${OPENSSL_LIBRARIES_NOTE})
+target_link_libraries(${PROJECT_NAME} PUBLIC 
+	${ROOT_PROJ_DIR}/thirdparty/lib/libmosquitto.so.1
+	${ROOT_PROJ_DIR}/thirdparty/lib/libmosquittopp.so.1)
 
 # 将对外输出文件导出
 if (EXPOSE_SUBMODULES)
-	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mqttcomm_ways.h DESTINATION ${ROOT_BUILD_DIR}/project/${PROJECT_NAME}/include)
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/mqttcomm_ways.h DESTINATION ${CMAKE_INSTALL_PREFIX}/include/${PROJECT_NAME})
 	install(TARGETS ${PROJECT_NAME} 
-		LIBRARY DESTINATION ${ROOT_BUILD_DIR}/project/${PROJECT_NAME}/lib
-		ARCHIVE DESTINATION ${ROOT_BUILD_DIR}/project/${PROJECT_NAME}/static_lib)
+		LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/inner
+		ARCHIVE DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/inner)
 endif()

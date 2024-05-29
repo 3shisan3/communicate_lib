@@ -18,23 +18,24 @@ elseif(WIN32)
 endif() 
 
 set(CMAKE_INSTALL_PREFIX "${USER_HOME_DIR}/program_running/${PROJECT_NAME}")
-# 复制库到安装目录的third_lib子目录  
-set(INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/third_lib")  
 
 # 设置构建选项前提
-option(BUILD_TEST "build test proj option"	ON)
-option(BUILD_PROJECT "build proj option"	ON)
-option(EXPOSE_SUBMODULES "create .a to libpath"	ON)
+option(BUILD_TEST "编译测试部分用例"	ON)
+option(BUILD_PROJECT "编译整体项目的工程"	ON)
+option(EXPOSE_SUBMODULES "子模块额外输出编译成果"	ON)
 
 #设置构建中用到的变量
 set(ROOT_PROJ_DIR ${PROJECT_SOURCE_DIR})
 set(ROOT_BUILD_DIR ${CMAKE_BINARY_DIR})
+set(THIRD_DEPEND_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 message(STATUS "ROOT_BUILD_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 
 # 设置C++标准为C++17
 set(CMAKE_CXX_STANDARD 17)
 # 强制要求使用C++17标准   
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+# 编译位置无关代码标志添加
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")  
 
 # 对外输出主目录(编译产出)
 set(SHARED_ROOT_DIR ${PROJECT_SOURCE_DIR}/sdk)
@@ -42,58 +43,40 @@ set(SHARED_ROOT_DIR ${PROJECT_SOURCE_DIR}/sdk)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${SHARED_ROOT_DIR}/lib)
 set(SUBLIB_OUT_PATH ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/inner)
 
-# 将源文件夹中的内容拷贝到目标文件夹下, 该操作与构建流程无关
-add_custom_target(
-	LINK_HEADERS ALL
-	COMMENT "link headers and config..."
-)
-add_custom_command(
-	TARGET LINK_HEADERS PRE_BUILD
-	COMMAND ${CMAKE_COMMAND} -E make_directory ${SHARED_ROOT_DIR}/include
-	COMMAND ${CMAKE_COMMAND} -E make_directory ${SHARED_ROOT_DIR}/config
-)
-add_custom_command(
-	TARGET LINK_HEADERS PRE_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/interface/*/*.h ${SHARED_ROOT_DIR}/include
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/source/*/*.json ${SHARED_ROOT_DIR}/config
-	DEPENDS ${SHARED_ROOT_DIR}/include AND ${SHARED_ROOT_DIR}/config
-)
-# 添加自定义安装命令，复制库文件  
-function(copy_system_libs target_dir origin_list)  
-	set(COPY_STAMP_FILES "")
-    foreach(lib ${origin_list})  
-        # 构建目标文件的完整路径  
-        get_filename_component(lib_name "${lib}" NAME)  
-        set(target_file "${target_dir}/${lib_name}")  
-          
-        # 添加自定义命令来复制单个库文件  
-        add_custom_command(  
-            OUTPUT ${CMAKE_BINARY_DIR}/install_libs_${lib_name}.stamp  
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${lib}" "${target_file}"  
-            COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/install_libs_${lib_name}.stamp  
-            COMMENT "Copying ${lib_name} to install directory"  
-            VERBATIM  
-        )  
-          
-        # 将所有单个库文件的stamp文件添加到install_openssl_libs目标的依赖中  
-        list(APPEND COPY_STAMP_FILES ${CMAKE_BINARY_DIR}/install_libs_${lib_name}.stamp)  
-    endforeach()  
-      
-    # 创建一个自定义目标，它依赖于所有单个库文件的stamp文件  
-    add_custom_target(install_libs ALL DEPENDS ${COPY_STAMP_FILES})  
-endfunction()  
+# 设置自定义模块的存放位置
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(copy_shared)
+include(install_systemLib)
 
 # 查找OpenSSL库
 find_package(OpenSSL REQUIRED)
 
-# 子模块库存储
-list(APPEND SUBMOUDLES_DIR_LIST
-		${PROJECT_SOURCE_DIR}/src/common/communicateViaHTTP
-		${PROJECT_SOURCE_DIR}/src/common/communicateViaMQTT)
+# 添加条件需要链接的库文件
+if(OpenSSL_FOUND)
+    message(STATUS "OpenSSL found")
+	set(OPENSSL_INCLUDE_DIRS_NOTE ${OPENSSL_INCLUDE_DIR})
+	list(APPEND OPENSSL_LIBRARIES_NOTE ${OPENSSL_LIBRARIES})
+
+	# 自定义安装命令，复制库文件  
+	copy_system_libs("${CMAKE_INSTALL_PREFIX}/third_lib" "${OPENSSL_LIBRARIES}")
+else()
+    message(STATUS "OpenSSL not found")
+	set(OPENSSL_INCLUDE_DIRS_NOTE ${PROJECT_SOURCE_DIR}/thirdparty/include/openssl_3)
+	list(APPEND OPENSSL_LIBRARIES_NOTE
+		${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lib/libssl.so.3
+		${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lib/libcrypto.so.3
+	)
+endif()
+message(STATUS "${PROJECT_NAME} OPENSSL_INCLUDE_DIRS: ${OPENSSL_INCLUDE_DIRS_NOTE}")
+message(STATUS "${PROJECT_NAME} OPENSSL_LIBRARIES: ${OPENSSL_LIBRARIES_NOTE}")
 
 # 添加源代码文件  
 file(GLOB_RECURSE SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")  
-
+# 子模块库存储
+list(APPEND SUBMOUDLES_DIR_LIST
+		${PROJECT_SOURCE_DIR}/src/common/communicateViaHTTP
+		${PROJECT_SOURCE_DIR}/src/common/communicateViaMQTT
+)
 # 记录子项目的源文件
 set(SubSources "")
 # 添加模块编译项
@@ -117,48 +100,20 @@ message(STATUS "SOURCES: ${SOURCES}")
 # add_subdirectory(${PROJECT_SOURCE_DIR}/src/source/dpi_ota EXCLUDE_FROM_ALL)
   
 # 添加头文件目录  
-include_directories(${PROJECT_SOURCE_DIR}/src
-					${SUBMOUDLES_DIR_LIST}
-                    )
+include_directories(${OPENSSL_INCLUDE_DIRS_NOTE}
+					${PROJECT_SOURCE_DIR}/src
+					# ${SUBMOUDLES_DIR_LIST}	子项目头文件包含设为PUBLIC，此处可忽略
+)
 
-
-# 指定了在安装目标库时，库的运行时依赖项应该被安装到哪个目录
-# set(CMAKE_INSTALL_RPATH "$ORIGIN")
-# 设置变量来禁用构建目标库时生成运行时搜索路径,与上变量互斥
-# set(CMAKE_SKIP_RPATH TRUE)
 # 生成动态库文件
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
-# 链接依赖关系，将子项目的源文件添加到主项目的构建过程中
-target_sources(${PROJECT_NAME} PUBLIC ${SubSources})
 
-# 设置需要一并输出依赖的动态库列表
-set(DEPENDENCY_LIB "")
-
-# 添加条件需要链接的库文件 
-if(OpenSSL_FOUND)
-    message(STATUS "OpenSSL found")
-	include_directories(${OPENSSL_INCLUDE_DIR}) 
-	target_link_libraries(${PROJECT_NAME} ${OPENSSL_LIBRARIES})
-
-	# list(APPEND DEPENDENCY_LIB ${OPENSSL_LIBRARIES})
-
-	# 自定义安装命令，复制库文件  
-	copy_system_libs("${INSTALL_LIB_DIR}" "${OPENSSL_LIBRARIES}")
-else()
-    message(STATUS "OpenSSL not found")
-	include_directories(${PROJECT_SOURCE_DIR}/thirdparty/include/openssl_3)
-	target_link_libraries(${PROJECT_NAME} ${DEPENDENCY_LIB})
-
-	list(APPEND DEPENDENCY_LIB
-		${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lib/libssl.so.3
-		${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/lib/libcrypto.so.3
-	)
-endif()
 
 # 添加动态库的搜索路径
 # link_directories(${CMAKE_CURRENT_SOURCE_DIR}/sdk/lib)
 # 添加需要链接的库文件
-target_link_libraries(${PROJECT_NAME} http_depend_workflow
+target_link_libraries(${PROJECT_NAME} ${OPENSSL_LIBRARIES_NOTE}
+									  http_depend_workflow
 									  mqtt_depend_mosquitto)
 
 # 测试项目
@@ -177,12 +132,18 @@ if (ROOT_PROJ_DIR)
 	# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/project/dpi_ota ${CMAKE_BINARY_DIR}/dpi_ota)
 endif()
 
-# 将对外输出文件导出
-install(DIRECTORY ${SHARED_ROOT_DIR}/ DESTINATION ${CMAKE_INSTALL_PREFIX})
-install(FILES ${DEPENDENCY_LIB} DESTINATION ${CMAKE_INSTALL_PREFIX}/third_lib)
+
+# 添加必要的安装动态库文件
+file(GLOB SHARED_LIBS ${THIRD_DEPEND_DIR}/lib/*.so.*)
+# 添加对外暴露头文件
+file(GLOB_RECURSE SHARED_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/src/interface/*.h)
+
+install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
+install(FILES ${SHARED_LIBS} DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+install(FILES ${SHARED_INCLUDES} DESTINATION ${CMAKE_INSTALL_PREFIX}/include)
+
 # 确保在make install时运行自定义安装命令  
 install(CODE "EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} --build . --target install_libs)")
 
-
 # 设置RPATH, 确保运行时可以找到依赖库
-set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "$ORIGIN;$ORIGIN/lib;$ORIGIN/third_lib;$ORIGIN/../third_lib")
+set_target_properties(${PROJECT_NAME} PROPERTIES INSTALL_RPATH "$ORIGIN;$ORIGIN/third_lib;$ORIGIN/../third_lib;$ORIGIN/lib;$ORIGIN/../lib")
