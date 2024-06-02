@@ -30,32 +30,36 @@ Version history
     #define GLOBAL_LOG_LEVEL LOG_LEVEL_INFO
 #endif
 
+#ifndef PROJECT_NAME
+    #define PROJECT_NAME ""
+#endif
+
 // 定义日志打印宏  
 #define LOG_DEBUG(file, ...) do { \
     if (LOG_LEVEL_DEBUG >= GLOBAL_LOG_LEVEL) \
     { \
-        fprintf(file, "[DEBUG]: "); \
+        fprintf(file, "[%sDEBUG]: ", PROJECT_NAME); \
         fprintf(file, __VA_ARGS__); \
     } } while (false)
 
 #define LOG_INFO(file, ...) do { \
     if (LOG_LEVEL_INFO >= GLOBAL_LOG_LEVEL) \
     { \
-        fprintf(file, "[INFO]: "); \
+        fprintf(file, "[%sINFO]: ", PROJECT_NAME); \
         fprintf(file, __VA_ARGS__); \
     } } while (false)
 
 #define LOG_WARNING(file, ...) do { \
     if (LOG_LEVEL_WARNING >= GLOBAL_LOG_LEVEL) \
     { \
-        fprintf(file, "[WARNING]: "); \
+        fprintf(file, "[%sWARNING]: ", PROJECT_NAME); \
         fprintf(file, __VA_ARGS__); \
     } } while (false)
 
 #define LOG_ERROR(file, ...) do { \
     if (LOG_LEVEL_ERROR >= GLOBAL_LOG_LEVEL) \
     { \
-        fprintf(file, "[ERROR]: "); \
+        fprintf(file, "[%sERROR]: ", PROJECT_NAME); \
         fprintf(file, __VA_ARGS__); \
     } } while (false)
 

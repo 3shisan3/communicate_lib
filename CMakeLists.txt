@@ -49,7 +49,7 @@ include(copy_shared)
 include(install_systemLib)
 
 # 查找OpenSSL库
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL)
 
 # 添加条件需要链接的库文件
 if(OpenSSL_FOUND)
@@ -107,6 +107,8 @@ include_directories(${OPENSSL_INCLUDE_DIRS_NOTE}
 
 # 生成动态库文件
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
+# 为特定目标添加编译时的宏定义，包括值
+target_compile_definitions(${PROJECT_NAME} PRIVATE PROJECT_NAME="${PROJECT_NAME} ")
 
 
 # 添加动态库的搜索路径
