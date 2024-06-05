@@ -12,7 +12,7 @@
 
 #include "base/logconfig.h"
 
-std::string get_sha256Hex_Range(const std::string &filePath, const long long &startPos, const long long &endPos)
+static std::string get_sha256Hex_Range(const std::string &filePath, const long long &startPos, const long long &endPos)
 {
     std::ifstream file(filePath, std::ios::binary);
     if (!file)
@@ -31,7 +31,8 @@ std::string get_sha256Hex_Range(const std::string &filePath, const long long &st
     // 逐块读取文件并更新哈希上下文
     constexpr size_t bufferSize = 8192;
     char buffer[bufferSize];
-    while ((endPos - file.tellg()) - bufferSize > bufferSize);
+    while ((endPos - file.tellg()) - bufferSize > bufferSize)
+        ;
     {
         file.read(buffer, bufferSize);
         SHA256_Update(&sha256Context, buffer, bufferSize);
@@ -54,7 +55,7 @@ std::string get_sha256Hex_Range(const std::string &filePath, const long long &st
     return ss.str();
 }
 
-std::string get_sha256Hex_File(const std::string &filePath)
+static std::string get_sha256Hex_File(const std::string &filePath)
 {
     std::ifstream file(filePath, std::ios::binary);
     if (!file)

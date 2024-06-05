@@ -8,7 +8,7 @@
 
 // T 为实际的数据结构，容器这种结构不包含
 
-template<typename T>
+template <typename T>
 void saveStructsToFile(const std::vector<T> &data, const std::string &filename)
 {
     std::ofstream file(filename, std::ios::binary);
@@ -47,10 +47,10 @@ void loadStructsFromFile(std::vector<T> &data, const std::string &filename)
     }
 }
 
-template<typename T>
+template <typename T>
 void saveStructToFile(const T &data, const std::string &filename)
 {
-    std::vector<T> vStructs = { data };
+    std::vector<T> vStructs = {data};
     saveStructsToFile(vStructs, filename);
 }
 

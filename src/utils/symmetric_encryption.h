@@ -22,7 +22,7 @@
  */
 static std::string GetEncryptData(const std::string &content, const std::string &key_str = DEFAULT_LOCAL_KEY)
 {
-    std::string result(content.length(), '\0'); // 预分配与明文相同长度的密文空间  
+    std::string result(content.length(), '\0'); // 预分配与明文相同长度的密文空间
     // 创建 AES 密钥
     AES_KEY key_aes;
     // 密匙长度bit为单位
@@ -73,7 +73,7 @@ static std::string GetEncryptData(const std::string &content, const std::string 
  */
 static std::string GetDecryptData(const std::string &content, const std::string &key_str = DEFAULT_LOCAL_KEY)
 {
-    std::string result(content.length(), '\0'); // 预分配与密文相同长度的解密文本空间 
+    std::string result(content.length(), '\0'); // 预分配与密文相同长度的解密文本空间
     // 创建 AES 密钥
     AES_KEY key_aes;
     // 密匙长度bit为单位
@@ -88,17 +88,18 @@ static std::string GetDecryptData(const std::string &content, const std::string 
         return "";
     }
 
-    unsigned char iv[AES_BLOCK_SIZE];  
+    unsigned char iv[AES_BLOCK_SIZE];
     memset(iv, 0, AES_BLOCK_SIZE); // 使用与加密相同的初始化向量
 
-    int len = content.length();  
+    int len = content.length();
     int blocks = len / AES_BLOCK_SIZE;
 
-    result.resize(blocks * AES_BLOCK_SIZE); // 预分配与明文相同长度的空间  
+    result.resize(blocks * AES_BLOCK_SIZE); // 预分配与明文相同长度的空间
 
-    for (int i = 0; i < blocks; i++) {  
-        AES_cbc_encrypt((unsigned char*)content.c_str() + i * AES_BLOCK_SIZE, (unsigned char*)result.c_str() + i * AES_BLOCK_SIZE, AES_BLOCK_SIZE, &key_aes, iv, AES_DECRYPT);  
-    } 
+    for (int i = 0; i < blocks; i++)
+    {
+        AES_cbc_encrypt((unsigned char *)content.c_str() + i * AES_BLOCK_SIZE, (unsigned char *)result.c_str() + i * AES_BLOCK_SIZE, AES_BLOCK_SIZE, &key_aes, iv, AES_DECRYPT);
+    }
 
     return result;
 }

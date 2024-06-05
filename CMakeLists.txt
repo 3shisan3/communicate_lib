@@ -22,7 +22,7 @@ set(CMAKE_INSTALL_PREFIX "${USER_HOME_DIR}/program_running/${PROJECT_NAME}")
 # 设置构建选项前提
 option(BUILD_TEST "编译测试部分用例"	ON)
 option(BUILD_PROJECT "编译整体项目的工程"	ON)
-option(EXPOSE_SUBMODULES "子模块额外输出编译成果"	ON)
+option(EXPOSE_SUBMODULES "子模块额外输出编译成果"	OFF)
 
 #设置构建中用到的变量
 set(ROOT_PROJ_DIR ${PROJECT_SOURCE_DIR})
@@ -33,7 +33,7 @@ message(STATUS "ROOT_BUILD_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 # 设置C++标准为C++17
 set(CMAKE_CXX_STANDARD 17)
 # 强制要求使用C++17标准   
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+# set(CMAKE_CXX_STANDARD_REQUIRED True)
 # 编译位置无关代码标志添加
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")  
 
