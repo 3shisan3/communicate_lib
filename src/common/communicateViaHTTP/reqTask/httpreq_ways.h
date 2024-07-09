@@ -21,17 +21,14 @@ Version history
 #include <stdlib.h>
 #include <stdio.h>
 #include <string>
-#include <HttpMessage.h>
-#include <HttpUtil.h>
-#include <json_parser.h>
-#include <WFTaskFactory.h>
-#include <WFFacilities.h>
+#include <vector>
 
-#include "multipart_parser.h"
+#include "httpcomm_structs.h"
 
 namespace communicate
 {
 
+class MultipartParser;
 struct CommContext
 {
     uint8_t curTaskIndex;
@@ -43,32 +40,31 @@ class HttpReqWays
 {
 public:
     //
-    static bool reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "");
+    static bool reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
 
-    static bool reqToPostResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "");
+    static bool reqToPostResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
 
     /**
      * @brief 发送文件请求
      *
      * @param[out] result           上传请求后的返回信息
-     * @param[in] filePaths         上传的所有文件路径集合（一次请求，传多个文件）
+     * @param[in] filePathsStr      上传的所有文件路径集合（一次请求，传多个文件）(json字符串）
      * @param[in] reqAddr           请求访问的网址
-     * @param[in] info              请求上传文件时附带的信息内容
-     * @param[in] headerInfo        请求需要额外增添的头信息
+     * @param[in] infoStr           请求上传文件时附带的信息内容(json字符串）
+     * @param[in] headerInfoStr     请求需要额外增添的头信息(json字符串）
      *
      * @return 请求通讯是否成功
      */
-    static bool reqToSendData(std::string &result, const json_object_t *filePaths, const std::string &reqAddr,
-                              const json_object_t *info = nullptr, const json_object_t *headerInfo = nullptr);
+    static bool reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
+							  const std::string &infoStr = "", const std::string &headerInfoStr = "");
 
 protected:
-    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo = "", const char *methodType = HttpMethodGet);
-    static WFHttpTask *getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo = "", const json_object_t *headerInfo = nullptr);
+    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo = "",
+                                        const char *methodType = "GET", const json_object_t *headerInfo = nullptr);
 
     static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const json_object_t *headerInfo = nullptr);
-    static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, const json_object_t *info = nullptr);
-    static WFHttpTask *getSpecialReqSendTask(const json_object_t *filePaths, const std::string &reqAddr,
-                                             const json_object_t *info = nullptr, const json_object_t *headerInfo = nullptr);
+    static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr,
+                                            const json_object_t *info = nullptr, const json_object_t *headerInfo = nullptr);
 
     /**
      * @brief 排序请求任务

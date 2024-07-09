@@ -8,10 +8,10 @@ project(mqtt_depend_mosquitto)
 set(CMAKE_CURRENT_BINARY_DIR ${ROOT_BUILD_DIR}/${PROJECT_NAME})
 message(STATUS "${PROJECT_NAME} BUILD_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 
-# 设置C++标准为C++17
-set(CMAKE_CXX_STANDARD 17)
-# 强制要求使用C++17标准   
-set(CMAKE_CXX_STANDARD_REQUIRED True)
+# # 设置C++标准为C++17
+# set(CMAKE_CXX_STANDARD 17)
+# # 强制要求使用C++17标准   
+# set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # 指定编译输出的库路径
 if (EXPOSE_SUBMODULES)
@@ -19,10 +19,11 @@ if (EXPOSE_SUBMODULES)
 endif()
 
 # 添加源代码文件  
-file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")  
+file(GLOB_RECURSE SUB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+message(STATUS "${PROJECT_NAME} SUB_SOURCES: ${SUB_SOURCES}")
 
 # 生成静态库文件  
-add_library(${PROJECT_NAME} STATIC ${SOURCES})
+add_library(${PROJECT_NAME} STATIC ${SUB_SOURCES})
 
 # 添加头文件目录，控制作用范围  
 target_include_directories(${PROJECT_NAME} PUBLIC

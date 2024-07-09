@@ -93,7 +93,7 @@ endforeach()
 # 临时单独去除websocket相关的编译
 file(GLOB_RECURSE subSources "${PROJECT_SOURCE_DIR}/src/common/communicateViaWebSocket/*.cpp")
 list(REMOVE_ITEM SOURCES ${subSources})
-message(STATUS "SOURCES: ${SOURCES}")
+message(STATUS "MAIN SOURCES: ${SOURCES}")
 
 # 设置排除链接编译的目录（混在主目录下的子目录）
 # add_subdirectory(${PROJECT_SOURCE_DIR}/src/interface/dpi_ota EXCLUDE_FROM_ALL)

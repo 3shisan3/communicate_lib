@@ -13,8 +13,8 @@ Version history
 
 *****************************************************************/
 
-#ifndef _DATA_MANAGER_H_
-#define _DATA_MANAGER_H_
+#ifndef _CHUNK_MANAGER_H_
+#define _CHUNK_MANAGER_H_
 
 #include <map>
 #include <memory>
@@ -22,33 +22,23 @@ Version history
 #include <string>
 #include <vector>
 
-#include "base/logconfig.h"
+#include "logconfig.h"
+#include "httpcomm_structs.h"
 
 extern std::string g_saveFileDir;
 
 namespace communicate
 {
 
-// 存入读取，使用sizeof需要明确结构体大小，std::string 不符合
-struct Resume_FileInfo
-{
-    char resumeName[198];       // 断电续传信息的记录文件名
-    char filePath[328];         // 记录信息的目标文件路径
-    char fileHash[68];          // 锁定文件的hash值
-    long long lastEndPos = 0;   // 最终处理结束的下标
-    uint32_t chunkSize = 0;     // 分块尺寸
-    char commAddr[648];         // 交互的地址   “作为任务划分的key”
-};
-
-class DataManager
+class ChunkManager
 {
 public:
-    static std::shared_ptr<DataManager> getInstance();
+    static std::shared_ptr<ChunkManager> getInstance();
 
-    // ~DataManager();
+    // ~ChunkManager();
 
 private:
-    DataManager();
+    ChunkManager();
 
     /**
      * @brief 断点续传上传, 及下载状态获取

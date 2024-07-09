@@ -1,7 +1,7 @@
-#include "data_manager.h"
+#include "chunk_manager.h"
 
-#include "base/utils_method.h"
-#include "utils/memory_access.h"
+#include "utils_method.h"
+#include "memory_access.h"
 
 std::string g_saveFileDir = "./temporary_cache/";
 
@@ -10,18 +10,18 @@ namespace communicate
 
 const std::string saveResumeFileDir = g_saveFileDir + "resume_note/";
 
-static std::shared_ptr<DataManager> s_ota_datamanager = nullptr;
+static std::shared_ptr<ChunkManager> s_ota_datamanager = nullptr;
 static std::once_flag s_singleFlag;
 
-std::shared_ptr<DataManager> DataManager::getInstance()
+std::shared_ptr<ChunkManager> ChunkManager::getInstance()
 {
     std::call_once(s_singleFlag, [&] {
-        s_ota_datamanager = std::shared_ptr<DataManager>(new DataManager());
+        s_ota_datamanager = std::shared_ptr<ChunkManager>(new ChunkManager());
     });
     return s_ota_datamanager;
 }
 
-DataManager::DataManager()
+ChunkManager::ChunkManager()
     : m_downResume_() , m_uploadResume_()
 {
     std::filesystem::create_directories(saveResumeFileDir);
@@ -29,13 +29,13 @@ DataManager::DataManager()
     getAllResumeTasks();
 }
 
-// DataManager::~DataManager()
+// ChunkManager::~ChunkManager()
 // {
 //     m_downResume_.clear();
 //     m_uploadResume_.clear();
 // }
 
-void DataManager::getAllResumeTasks()
+void ChunkManager::getAllResumeTasks()
 {
     Resume_FileInfo tempCache;
 
@@ -56,7 +56,7 @@ void DataManager::getAllResumeTasks()
     }
 }
 
-const Resume_FileInfo *DataManager::getDownTaskInfo(const std::string &key) const
+const Resume_FileInfo *ChunkManager::getDownTaskInfo(const std::string &key) const
 {
     if (m_downResume_.find(key) == m_downResume_.end())
     {
@@ -66,7 +66,7 @@ const Resume_FileInfo *DataManager::getDownTaskInfo(const std::string &key) cons
     return &m_downResume_.at(key);
 }
 
-const std::vector<const Resume_FileInfo *> DataManager::getSendTaskInfo(const std::string &taskAddr) const
+const std::vector<const Resume_FileInfo *> ChunkManager::getSendTaskInfo(const std::string &taskAddr) const
 {
     std::vector<const Resume_FileInfo *> result = {};
 
@@ -79,7 +79,7 @@ const std::vector<const Resume_FileInfo *> DataManager::getSendTaskInfo(const st
     return result;
 }
 
-void DataManager::saveDownTaskInfo(const Resume_FileInfo &taskInfo, std::string fileName)
+void ChunkManager::saveDownTaskInfo(const Resume_FileInfo &taskInfo, std::string fileName)
 {
     if (fileName == "")
     {
@@ -95,7 +95,7 @@ void DataManager::saveDownTaskInfo(const Resume_FileInfo &taskInfo, std::string 
     m_downResume_.insert({key, taskInfo});
 }
 
-void DataManager::delDownTaskInfo(const std::string &key)
+void ChunkManager::delDownTaskInfo(const std::string &key)
 {
     if (m_downResume_.find(key) == m_downResume_.end())
     {

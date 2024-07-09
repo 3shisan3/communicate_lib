@@ -2,9 +2,17 @@
 
 #include <cstring>
 
-#include "base/Json.h"
-#include "base/logconfig.h"
-#include "base/utils_method.h"
+#include <HttpMessage.h>
+#include <HttpUtil.h>
+#include <json_parser.h>
+#include <WFTaskFactory.h>
+#include <WFFacilities.h>
+
+#include "multipart_parser.h"
+#include "Json.h"
+#include "logconfig.h"
+#include "utils_method.h"
+#include "chunk_manager.h"
 
 #define DEFAULT_CHUNK_SIZE    10485760      // 10M
 #define CHECK_BYTES_NUMBER   10             // 重叠byte数来校验文件完整
@@ -15,6 +23,12 @@
 
 namespace communicate
 {
+
+struct CommContextAtChunk : public CommContext
+{
+    Resume_FileInfo resumeInfo;
+    std::ofstream outFile;
+};
 
 WFHttpTask *SpecialSupReq::getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo, const json_object_t *headerInfo)
 {
@@ -99,6 +113,7 @@ bool SpecialSupReq::reqToGetChunkDataBySeries(const Resume_FileInfo *curInfo, co
     base::Json headerJson;
     headerJson.push_back("Range", "bytes=" + downRange);
     headerJson.push_back("Connection", "keep-alive");
+    headerJson.push_back("FuncName", "dealDownloadDataReq");
     json_object_t *headerInfo = json_value_object(json_value_parse(headerJson.dump().c_str()));
     // 设置context信息
     CommContextAtChunk context;
@@ -128,7 +143,7 @@ bool SpecialSupReq::reqToGetChunkDataBySeries(const Resume_FileInfo *curInfo, co
 
     context.outFile.close();
     std::string mapKey = curInfo->fileHash[0] == '\0' ? curInfo->commAddr : curInfo->fileHash;
-    DataManager::getInstance()->delDownTaskInfo(mapKey);
+    ChunkManager::getInstance()->delDownTaskInfo(mapKey);
 	return context.communicate_status;
 }
 
@@ -312,7 +327,7 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
     // 记录当前状态
     context->resumeInfo.lastEndPos = context->outFile.tellp();
     // 采用阻塞形式存入当前下载状态（当前忽略篡改的影响，不记录hash）
-    DataManager::getInstance()->saveDownTaskInfo(context->resumeInfo, context->resumeInfo.resumeName);
+    ChunkManager::getInstance()->saveDownTaskInfo(context->resumeInfo, context->resumeInfo.resumeName);
 
     LOG_DEBUG(stderr, "Print resp data: %s \n", context->resp_data.c_str());
 	{ // 打印当前task结束时间戳
@@ -335,6 +350,7 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
     std::string downRange = std::to_string(curStartPos) + "-" + std::to_string(curEndPos);
     base::Json headerJson;
     headerJson.push_back("Range", "bytes=" + downRange);
+    headerJson.push_back("FuncName", "dealDownloadDataReq");
     rangeEnd == curEndPos ? headerJson.push_back("Connection", "close") :
                             headerJson.push_back("Connection", "keep-alive");
     json_object_t *headerInfo = json_value_object(json_value_parse(headerJson.dump().c_str()));

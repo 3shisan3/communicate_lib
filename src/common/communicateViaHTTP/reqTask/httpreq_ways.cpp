@@ -1,7 +1,14 @@
 #include "httpreq_ways.h"
 
+#include <HttpMessage.h>
+#include <HttpUtil.h>
+#include <json_parser.h>
+#include <WFTaskFactory.h>
+#include <WFFacilities.h>
+
 #include "logconfig.h"
 #include "utils_method.h"
+#include "multipart_parser.h"
 
 #define REDIRECT_MAX    5
 #define RETRY_MAX       2
@@ -9,7 +16,7 @@
 namespace communicate
 {
 
-WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo, const char *methodType)
+WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo, const char *methodType, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
 	http_task = WFTaskFactory::create_http_task(reqAddr,
@@ -21,31 +28,6 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std:
 	req->add_header_pair("Accept", "*/*");
 	// req->add_header_pair("User-Agent", "Wget/1.14 (linux-gnu)");
 	req->add_header_pair("Connection", "close");
-
-	/* Add req body info*/
-	req->add_header_pair("Content-Type", "application/json");
-	req->append_output_body(reqInfo);
-
-	/* Limit the http response size to 20M. */
-	// http_task->get_resp()->set_size_limit(20 * 1024 * 1024);
-
-	/* no more than 30 seconds receiving http response. */
-	http_task->set_receive_timeout(30 * 1000);
-
-	return http_task;
-}
-
-WFHttpTask *HttpReqWays::getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo, const json_object_t *headerInfo)
-{
-	WFHttpTask *http_task;
-	http_task = WFTaskFactory::create_http_task(reqAddr,
-												REDIRECT_MAX, RETRY_MAX,
-												wget_info_callback);
-	protocol::HttpRequest *req = http_task->get_req();
-
-	req->set_method(HttpMethodGet);
-	req->add_header_pair("Accept", "*/*");
-	// req->add_header_pair("User-Agent", "Wget/1.14 (linux-gnu)");
 
 	if (headerInfo != nullptr)
 	{
@@ -83,9 +65,13 @@ WFHttpTask *HttpReqWays::getSpecialReqGetTask(const std::string &reqAddr, const 
 			req->add_header_pair((std::string)name, val_str);
 		}
 	}
+
 	/* Add req body info*/
 	req->add_header_pair("Content-Type", "application/json");
 	req->append_output_body(reqInfo);
+
+	/* Limit the http response size to 20M. */
+	// http_task->get_resp()->set_size_limit(20 * 1024 * 1024);
 
 	/* no more than 30 seconds receiving http response. */
 	http_task->set_receive_timeout(30 * 1000);
@@ -151,55 +137,7 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, const json_object_t *info)
-{
-	/* Parse file to Create body*/
-	MultipartParser parser;
-	const char *name;
-	const json_value_t *val;
-
-	if (info != nullptr)
-	{
-		json_object_for_each(name, val, info)
-		{
-			std::string val_str = "";
-			switch (json_value_type(val))
-			{
-			case JSON_VALUE_STRING:
-				val_str = json_value_string(val);
-				break;
-			case JSON_VALUE_NUMBER:
-				{
-					double tempNum = json_value_number(val);
-					val_str = hasDecimal(tempNum) ? std::to_string(tempNum) :
-													std::to_string(static_cast<int>(tempNum));
-				}
-				break;
-			case JSON_VALUE_TRUE:
-				val_str = "true";
-				break;
-			case JSON_VALUE_FALSE:
-				val_str = "false";
-				break;
-			default:
-				LOG_WARNING(stderr, "this value handles an exception, "
-					"the type cannot be written to the request content, "
-					"type value %d", json_value_type(val));
-				break;
-			}
-			parser.addParameter((std::string)name, val_str);
-		}
-	}
-
-	json_object_for_each(name, val, filePaths)
-	{
-		parser.addFile((std::string)name, (std::string)json_value_string(val));
-	}
-
-	return getReqSendTask(parser, reqAddr, nullptr);
-}
-
-WFHttpTask *HttpReqWays::getSpecialReqSendTask(const json_object_t *filePaths, const std::string &reqAddr,
+WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr,
 											   const json_object_t *info, const json_object_t *headerInfo)
 {
 	const char *name;
@@ -247,33 +185,55 @@ WFHttpTask *HttpReqWays::getSpecialReqSendTask(const json_object_t *filePaths, c
 	return getReqSendTask(parser, reqAddr, headerInfo);
 }
 
-bool HttpReqWays::reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo)
-{
-	WFHttpTask *http_task = getCommonReqTask(reqAddr, reqInfo);
-
-	uint8_t temp = 0;
-	return reqGetRespBySeries({http_task}, result, temp);
-}
-
-bool HttpReqWays::reqToPostResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo)
-{
-	WFHttpTask *http_task = getCommonReqTask(reqAddr, reqInfo, HttpMethodPost);
-
-	uint8_t temp = 0;
-	return reqGetRespBySeries({http_task}, result, temp);
-}
-
-bool HttpReqWays::reqToSendData(std::string &result, const json_object_t *filePaths, const std::string &reqAddr,
-								const json_object_t *info, const json_object_t *headerInfo)
+bool HttpReqWays::reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo, const std::string &headerInfoStr)
 {
 	WFHttpTask *http_task;
-	if (headerInfo == nullptr)
+	if (headerInfoStr.empty())
+	{
+		http_task = getCommonReqTask(reqAddr, reqInfo);
+	}
+	else
+	{
+		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
+		http_task = getCommonReqTask(reqAddr, reqInfo, HttpMethodGet, headerInfo);
+	}
+
+	uint8_t temp = 0;
+	return reqGetRespBySeries({http_task}, result, temp);
+}
+
+bool HttpReqWays::reqToPostResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo, const std::string &headerInfoStr)
+{
+	WFHttpTask *http_task;
+	if (headerInfoStr.empty())
+	{
+		http_task = getCommonReqTask(reqAddr, reqInfo, HttpMethodPost);
+	}
+	else
+	{
+		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
+		http_task = getCommonReqTask(reqAddr, reqInfo, HttpMethodPost, headerInfo);
+	}
+
+	uint8_t temp = 0;
+	return reqGetRespBySeries({http_task}, result, temp);
+}
+
+bool HttpReqWays::reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
+								const std::string &infoStr, const std::string &headerInfoStr)
+{
+	json_object_t * filePaths = json_value_object(json_value_parse(filePathsStr.c_str()));
+	json_object_t * info = json_value_object(json_value_parse(infoStr.c_str()));
+
+	WFHttpTask *http_task;
+	if (headerInfoStr.empty())
 	{
 		http_task = getCommonReqSendTask(filePaths, reqAddr, info);
 	}
 	else
 	{
-		http_task = getSpecialReqSendTask(filePaths, reqAddr, info, headerInfo);
+		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
+		http_task = getCommonReqSendTask(filePaths, reqAddr, info, headerInfo);
 	}
 
 	uint8_t temp = 0;
@@ -336,8 +296,7 @@ std::vector<int> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask 
 {
 	std::vector<int> sucTasks;
 
-	ParallelWork *parallelWork = Workflow::create_parallel_work([&](const ParallelWork *pwork)
-																{
+	ParallelWork *parallelWork = Workflow::create_parallel_work([&](const ParallelWork *pwork) {
 		CommContext *context;
 
 		for (size_t i = 0; i < pwork->size(); i++)
@@ -363,7 +322,8 @@ std::vector<int> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask 
 			char timestamp[32];
 			getDateStamp(timestamp, sizeof(timestamp));
 			LOG_DEBUG(stderr, "--- ParallelWork end at : %s ---\r\n", timestamp);
-		} });
+		}
+	});
 
 	SeriesWork *series;
 	CommContext *ctx;
@@ -498,7 +458,7 @@ void HttpReqWays::wget_info_callback(WFHttpTask *task)
 
 	if (task->get_state() != WFT_STATE_SUCCESS)
 	{
-		LOG_ERROR(stderr, "WFT_STATE Error.\n");
+		LOG_ERROR(stderr, "Http Req Error, Error Code: %d.\n", task->get_state());
 		context->communicate_status = false;
 		series->cancel();
 		return;

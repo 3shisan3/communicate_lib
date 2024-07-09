@@ -14,18 +14,18 @@ Version history
 
 *****************************************************************/
 
-#ifndef _SPECIAL_SUPPLY_REQ_H_
-#define _SPECIAL_SUPPLY_REQ_H_
+#ifndef SPECIAL_SUPPLY_REQ_H
+#define SPECIAL_SUPPLY_REQ_H
 
 #include <fstream>
 
-#include "common/data_manager.h"
+#include "httpcomm_structs.h"
 #include "httpreq_ways.h"
-#include "multipart_parser.h"
 
 namespace communicate
 {
 
+struct Resume_FileInfo;
 class SpecialSupReq : HttpReqWays
 {
 public:
@@ -83,12 +83,6 @@ protected:
     static WFHttpTask *getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo = "", const json_object_t *headerInfo = nullptr);
 
 private:
-    struct CommContextAtChunk : public CommContext 
-    {
-        Resume_FileInfo resumeInfo;
-        std::ofstream outFile;
-    };
-
     static void wget_chunk_callback(WFHttpTask *task);
 
 };

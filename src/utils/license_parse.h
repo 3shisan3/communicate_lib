@@ -10,7 +10,7 @@
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 
-#include "base/logconfig.h"
+#include "logconfig.h"
 
 #define RSA_KEYSUB_LEN 64
 

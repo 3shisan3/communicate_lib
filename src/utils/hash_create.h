@@ -10,7 +10,7 @@
 #include <sstream>
 #include <openssl/sha.h>
 
-#include "base/logconfig.h"
+#include "logconfig.h"
 
 static std::string get_sha256Hex_Range(const std::string &filePath, const long long &startPos, const long long &endPos)
 {

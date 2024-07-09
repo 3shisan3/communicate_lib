@@ -4,7 +4,7 @@
 #include <fstream>
 #include <vector>
 
-#include "base/logconfig.h"
+#include "logconfig.h"
 
 // T 为实际的数据结构，容器这种结构不包含
 
