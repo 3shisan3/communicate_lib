@@ -1,5 +1,7 @@
 #pragma once
 
+#define ENABLE_THIS_ABILITY ON
+
 template<class REQ, class RESP>
 class WFNetworkTask;
 
@@ -13,18 +15,23 @@ typedef struct __json_object json_object_t;
 
 namespace communicate
 {
-
 enum HTTP_ERROR_CODE
 {
     SUCCESS = 0,
+    /* 通用错误 */
     UNDEFINED_FAILED,
+    SSL_ERROR，
+    SYSTEM_ERROR,
+    TASK_ERROR，
     /* 客户端错误 */
-    SSL
+    DNS_ERROR，
     /* 服务端错误 */
-    
+    NOREPLY
 };
 
-// 存入读取，使用sizeof需要明确结构体大小，std::string 不符合
+#if @RESUME_MOUDLE_MAKE@ == ENABLE_THIS_ABILITY
+#include <cstdint>
+
 struct Resume_FileInfo
 {
     char resumeName[198];       // 断电续传信息的记录文件名
@@ -34,5 +41,6 @@ struct Resume_FileInfo
     uint32_t chunkSize = 0;     // 分块尺寸
     char commAddr[648];         // 交互的地址   “作为任务划分的key”
 };
+#endif
 
-}
+} // namespace communicate

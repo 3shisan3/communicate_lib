@@ -22,7 +22,13 @@ if (EXPOSE_SUBMODULES)
 	set(LIBRARY_OUTPUT_PATH ${SUBLIB_OUT_PATH})
 endif()
 
-set(SHARED_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/reqTask/httpreq_ways.h")
+# 依据配置生成包含的头文件
+configure_file(  
+  "${CMAKE_CURRENT_SOURCE_DIR}/httpcomm_structs.txt"  
+  "${CMAKE_CURRENT_BINARY_DIR}/httpcomm_structs.h"  
+)  
+
+set(SHARED_HEADERS "${CMAKE_CURRENT_BINARY_DIR}/httpcomm_structs.h,${CMAKE_CURRENT_SOURCE_DIR}/reqTask/httpreq_ways.h")
 set(LINK_HEADER_PATH "")
 list(APPEND LINK_HEADER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/reqTask)
 # 添加源代码文件  
@@ -49,6 +55,7 @@ add_library(${PROJECT_NAME} STATIC ${SUB_SOURCES})
 # 添加头文件目录  
 target_include_directories(${PROJECT_NAME} PUBLIC 
 	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_CURRENT_BINARY_DIR}
 	${LINK_HEADER_PATH}
 	${ROOT_PROJ_DIR}/src/base
 	${ROOT_PROJ_DIR}/thirdparty/include/workflow)

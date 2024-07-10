@@ -26,12 +26,17 @@ namespace communicate
 {
 
 struct Resume_FileInfo;
+
+namespace http
+{
+
 class SpecialSupReq : HttpReqWays
 {
 public:
     /**
      * @brief 分段获取文件(按序下载)
      *
+     * curInfo 包含的结构信息
      * @param[out] fileName         存入的指定文件对象
      * @param[in] reqAddr           请求访问的网址
      * @param[in] chunkSize         指定分块大小
@@ -87,5 +92,6 @@ private:
 
 };
 
+}
 }
 #endif

@@ -2,7 +2,7 @@
 
 #include "instance_manager/mqttclient_instances.h"
 
-namespace communicate
+namespace communicate::mqtt
 {
 
 void MqttCommWays::initMqttData(const std::string &clientID)

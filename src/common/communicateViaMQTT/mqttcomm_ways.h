@@ -18,7 +18,7 @@ Version history
 
 #include <string>
 
-namespace communicate
+namespace communicate::mqtt
 {
 
 enum MQTT_ERROR_CODE

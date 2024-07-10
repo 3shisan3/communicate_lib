@@ -29,20 +29,29 @@ namespace communicate
 {
 
 class MultipartParser;
+
+namespace http
+{
+
 struct CommContext
 {
     uint8_t curTaskIndex;
-    bool communicate_status;
+    HTTP_ERROR_CODE communicate_status;
     std::string resp_data;
+};
+
+struct ReconnectCfg
+{
+    
 };
 
 class HttpReqWays
 {
 public:
     //
-    static bool reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
+    static HTTP_ERROR_CODE reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
 
-    static bool reqToPostResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
+    static HTTP_ERROR_CODE reqToPostResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
 
     /**
      * @brief 发送文件请求
@@ -53,9 +62,9 @@ public:
      * @param[in] infoStr           请求上传文件时附带的信息内容(json字符串）
      * @param[in] headerInfoStr     请求需要额外增添的头信息(json字符串）
      *
-     * @return 请求通讯是否成功
+     * @return 请求通讯的状态
      */
-    static bool reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
+    static HTTP_ERROR_CODE reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
 							  const std::string &infoStr = "", const std::string &headerInfoStr = "");
 
 protected:
@@ -73,9 +82,9 @@ protected:
      * @param[out] failTaskIndex    失败任务序号
      * @param[in] vTasks            请求的任务集合
      *
-     * @return 请求通讯是否成功
+     * @return 请求通讯状态码
      */
-    static bool reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::string &finResult, uint8_t &failTaskIndex);
+    static HTTP_ERROR_CODE reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::string &finResult, uint8_t &failTaskIndex);
     /**
      * @brief 并行请求任务
      *
@@ -93,4 +102,5 @@ private:
 };
 
 }
+}   // communicate
 #endif

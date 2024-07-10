@@ -21,7 +21,7 @@
 
 // const std::string def_resp = "Too many replies, cancel printing";
 
-namespace communicate
+namespace communicate::http
 {
 
 struct CommContextAtChunk : public CommContext
@@ -85,7 +85,7 @@ bool SpecialSupReq::reqToGetChunkDataBySeries(const Resume_FileInfo *curInfo, co
 	{
 		CommContextAtChunk *context = (CommContextAtChunk *)series->get_context();
 
-		if (context->communicate_status)
+		if (context->communicate_status == HTTP_ERROR_CODE::SUCCESS)
 		{
 			LOG_INFO(stderr, "Series finished. all success!\n");
 		}
@@ -118,7 +118,7 @@ bool SpecialSupReq::reqToGetChunkDataBySeries(const Resume_FileInfo *curInfo, co
     // 设置context信息
     CommContextAtChunk context;
     context.curTaskIndex = 0;
-	context.communicate_status = true;
+	context.communicate_status = HTTP_ERROR_CODE::SUCCESS;
     std::strncpy(context.resumeInfo.resumeName, curInfo->resumeName, sizeof(curInfo->resumeName));
     context.resumeInfo.lastEndPos = curInfo->lastEndPos == 0 ? (long long)out.tellp() : curInfo->lastEndPos;
     context.resumeInfo.chunkSize = chunkSize;
@@ -144,7 +144,7 @@ bool SpecialSupReq::reqToGetChunkDataBySeries(const Resume_FileInfo *curInfo, co
     context.outFile.close();
     std::string mapKey = curInfo->fileHash[0] == '\0' ? curInfo->commAddr : curInfo->fileHash;
     ChunkManager::getInstance()->delDownTaskInfo(mapKey);
-	return context.communicate_status;
+	return context.communicate_status == HTTP_ERROR_CODE::SUCCESS;
 }
 
 std::vector<MultipartParser> SpecialSupReq::getFileChunkStructs(const std::string &paramName, const std::string &filePath, uint32_t chunkSize)
@@ -208,16 +208,16 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
 
 	/* 数据传出 */
 	SeriesWork *series = series_of(task);
-	CommContextAtChunk *context = (CommContextAtChunk *)series->get_context();
+	CommContextAtChunk *context;
 	if (!series)
 	{
 		LOG_ERROR(stderr, "This resume task have not bind context.\n");
-        context->communicate_status = false;
         return;
 	}
 	else
 	{
-		if (!context->communicate_status)
+        context = (CommContextAtChunk *)series->get_context();
+		if (context->communicate_status != HTTP_ERROR_CODE::SUCCESS)
 		{
 			LOG_DEBUG(stderr, "This Series task running failed at taskIndex: %d .\r\n", context->curTaskIndex);
 			return;
@@ -228,7 +228,7 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
 	if (task->get_state() != WFT_STATE_SUCCESS)
 	{
 		LOG_ERROR(stderr, "WFT_STATE Error.\n");
-		context->communicate_status = false;
+		// context->communicate_status = false;
 		series->cancel();
 		return;
 	}
@@ -239,7 +239,7 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
     resp_cursor.find("Content-Range", contentRange);
     if (contentRange.empty())
     {   // 分段下载场景下，此处一定会有信息
-        context->communicate_status = false;
+        context->communicate_status = HTTP_ERROR_CODE::UNDEFINED_FAILED;
         LOG_ERROR(stderr, "The resume task has not content-range !\n");
         return;
     }
@@ -252,11 +252,11 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
     }
 	/* Get response body. */
 	context->resp_data = protocol::HttpUtil::decode_chunked_body(task->get_resp());
-	context->communicate_status = true;
+	// context->communicate_status = true;
     if (context->resp_data.empty())
     {
         LOG_ERROR(stderr, "The response to this request is empty !\n");
-        context->communicate_status = false;
+        // context->communicate_status = false;
         return;
     }
 
