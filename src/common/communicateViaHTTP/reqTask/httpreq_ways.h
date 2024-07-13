@@ -16,6 +16,7 @@ Version history
 #ifndef HTTPREQ_WAYS_H
 #define HTTPREQ_WAYS_H
 
+#include <map>
 #include <netdb.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -25,29 +26,23 @@ Version history
 
 #include "httpcomm_structs.h"
 
-namespace communicate
+namespace communicate::http
 {
-
-class MultipartParser;
-
-namespace http
-{
-
-struct CommContext
-{
-    uint8_t curTaskIndex;
-    HTTP_ERROR_CODE communicate_status;
-    std::string resp_data;
-};
 
 struct ReconnectCfg
 {
-    
+    bool enable_features = false;   // 启用重新尝试功能
+    uint32_t max_spaceTime = 120;   // 最大任务重载间隔（单位：秒） 
+    uint8_t max_nums = 3;           // 最大失败任务重载次数
 };
 
 class HttpReqWays
 {
 public:
+    // 控制全局默认的重试状态
+    static void initHttpReqParams(const ReconnectCfg &cfg);
+    static void initHttpReqParams(const std::string &cfgPath);
+    
     //
     static HTTP_ERROR_CODE reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
 
@@ -65,18 +60,20 @@ public:
      * @return 请求通讯的状态
      */
     static HTTP_ERROR_CODE reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
-							  const std::string &infoStr = "", const std::string &headerInfoStr = "");
+                                         const std::string &infoStr = "", const std::string &headerInfoStr = "");
 
-protected:
-    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo = "",
+
+    /* The following functions are intended for task implementations only. */
+
+    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, bool promiseReqSuc, const std::string &reqInfo = "",
                                         const char *methodType = "GET", const json_object_t *headerInfo = nullptr);
 
-    static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const json_object_t *headerInfo = nullptr);
-    static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr,
+    static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, bool promiseReqSuc, const json_object_t *headerInfo = nullptr);
+    static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, bool promiseReqSuc,
                                             const json_object_t *info = nullptr, const json_object_t *headerInfo = nullptr);
 
     /**
-     * @brief 排序请求任务
+     * @brief 有序请求任务
      *
      * @param[out] finResult        最终的云端回复
      * @param[out] failTaskIndex    失败任务序号
@@ -85,6 +82,15 @@ protected:
      * @return 请求通讯状态码
      */
     static HTTP_ERROR_CODE reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::string &finResult, uint8_t &failTaskIndex);
+    /**
+     * @brief 有序请求任务（任务之间无依赖关系）
+     *
+     * @param[in] vTasks            请求的任务集合
+     * @param[out] allResult        所有任务的云端回复，与入参vTasks序号一致
+     *
+     * @return 请求失败的任务序号，及状态码
+     */
+    static std::map<int, HTTP_ERROR_CODE> reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::vector<std::string> &allResult);
     /**
      * @brief 并行请求任务
      *
@@ -95,12 +101,32 @@ protected:
      */
     static std::vector<int> reqGetRespByParallel(const std::vector<WFHttpTask *> &vTasks, std::vector<std::string> &allResult);
 
+protected:
+    struct CommContext
+    {
+        uint8_t curTaskIndex;
+        HTTP_ERROR_CODE communicate_status;
+        std::string resp_data;
+    };
+
+    /**
+     * @brief 并行请求任务
+     *
+     * @param[out] allResult        所有任务的云端回复
+     * @param[in] vTasks            请求的任务集合
+     *
+     * @return 通讯成功任务序号
+     */
+    static HTTP_ERROR_CODE createReTasksSeries();
+
     static void base_callback_deal(WFHttpTask *task);
+
 private:
     static inline void debugPrint(protocol::HttpRequest *req, protocol::HttpResponse *resp);
     static void wget_info_callback(WFHttpTask *task);
+    // 尽可能保证请求成功的回调
+    static void wget_promise_callback(WFHttpTask *task);
 };
 
 }
-}   // communicate
 #endif

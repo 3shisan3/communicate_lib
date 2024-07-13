@@ -22,12 +22,7 @@ Version history
 #include "httpcomm_structs.h"
 #include "httpreq_ways.h"
 
-namespace communicate
-{
-
-struct Resume_FileInfo;
-
-namespace http
+namespace communicate::http
 {
 
 class SpecialSupReq : HttpReqWays
@@ -67,7 +62,7 @@ public:
      * @param[in] reqAddr           请求访问的网址
      *
      * @return 所有上传任务是否通信成功
-     */ 
+     */
     static bool reqToSendChunkDataBySeries(uint8_t &failTaskIndex, std::string &finResult,
                                            std::vector<MultipartParser> &chunksInfo, const std::string &reqAddr);
 
@@ -80,11 +75,17 @@ public:
      * @param[in] reqAddr           请求访问的网址
      *
      * @return 所有上传任务是否通信成功
-     */ 
+     */
     static bool reqToSendChunkDataByParallel(std::vector<int> &failTaskIndexs, std::vector<std::string> &allResult,
                                              std::vector<MultipartParser> &chunksInfo, const std::string &reqAddr);
 
 protected:
+    struct CommContextAtChunk : public HttpReqWays::CommContext
+    {
+        Resume_FileInfo resumeInfo;
+        std::ofstream outFile;
+    };
+
     static WFHttpTask *getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo = "", const json_object_t *headerInfo = nullptr);
 
 private:
@@ -92,6 +93,5 @@ private:
 
 };
 
-}
 }
 #endif

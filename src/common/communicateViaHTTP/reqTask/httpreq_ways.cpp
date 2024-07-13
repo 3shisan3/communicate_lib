@@ -1,5 +1,7 @@
 #include "httpreq_ways.h"
 
+#include <memory>
+
 #include <HttpMessage.h>
 #include <HttpUtil.h>
 #include <json_parser.h>
@@ -16,7 +18,28 @@
 namespace communicate::http
 {
 
-WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo, const char *methodType, const json_object_t *headerInfo)
+ReconnectCfg g_reconnectCfg = {};
+struct ReTaskManager
+{
+	uint8_t reCount = 0;
+	SeriesWork *reQueuePtr = nullptr;
+};
+// key 当前为访问链接
+std::map<std::string, std::unique_ptr<ReTaskManager>> g_reQueueMap;
+
+void HttpReqWays::initHttpReqParams(const ReconnectCfg &cfg)
+{
+	g_reconnectCfg = cfg;
+}
+
+void HttpReqWays::initHttpReqParams(const std::string &cfgPath)
+{
+	// todo 判断输入配置文件为yaml还是json
+}
+
+/* WFHttpTask 本身构造时不涉及SeriesWork，但在start()时会进行构造 */
+WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, bool promiseReqSuc,
+										  const std::string &reqInfo, const char *methodType, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
 	http_task = WFTaskFactory::create_http_task(reqAddr,
@@ -67,7 +90,7 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std:
 	}
 
 	/* Add req body info*/
-	req->add_header_pair("Content-Type", "application/json");
+	req->add_header_pair("Content-Type", "application/json");	// todo 是否先判断reqInfo是否为json字符串
 	req->append_output_body(reqInfo);
 
 	/* Limit the http response size to 20M. */
@@ -79,7 +102,7 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std:
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const json_object_t *headerInfo)
+WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::string &reqAddr, bool promiseReqSuc, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
 	http_task = WFTaskFactory::create_http_task(reqAddr,
@@ -137,8 +160,8 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr,
-											   const json_object_t *info, const json_object_t *headerInfo)
+WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, bool promiseReqSuc,
+											  const json_object_t *info, const json_object_t *headerInfo)
 {
 	const char *name;
 	const json_value_t *val;
@@ -182,7 +205,7 @@ WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, co
 		parser.addFile((std::string)name, (std::string)json_value_string(val));
 	}
 
-	return getReqSendTask(parser, reqAddr, headerInfo);
+	return getReqSendTask(parser, reqAddr, promiseReqSuc, headerInfo);
 }
 
 HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo, const std::string &headerInfoStr)
@@ -190,12 +213,12 @@ HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqTask(reqAddr, reqInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo);
 	}
 	else
 	{
 		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqTask(reqAddr, reqInfo, HttpMethodGet, headerInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo, HttpMethodGet, headerInfo);
 	}
 
 	uint8_t temp = 0;
@@ -207,12 +230,12 @@ HTTP_ERROR_CODE HttpReqWays::reqToPostResp(std::string &result, const std::strin
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqTask(reqAddr, reqInfo, HttpMethodPost);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo, HttpMethodPost);
 	}
 	else
 	{
 		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqTask(reqAddr, reqInfo, HttpMethodPost, headerInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo, HttpMethodPost, headerInfo);
 	}
 
 	uint8_t temp = 0;
@@ -247,8 +270,7 @@ HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> 
 	context.curTaskIndex = 0;
 	context.communicate_status = HTTP_ERROR_CODE::SUCCESS;
 
-	auto series_callback = [&wait_group, &finResult, &failTaskIndex](const SeriesWork *series)
-	{
+	auto series_callback = [&wait_group, &finResult, &failTaskIndex](const SeriesWork *series) {
 		CommContext *context = (CommContext *)series->get_context();
 
 		if (context->communicate_status == HTTP_ERROR_CODE::SUCCESS)
@@ -286,6 +308,10 @@ HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> 
 		LOG_INFO(stderr, "--- Series start at : %s ---\r\n", timestamp);
 	}
 	series->start();
+	// 使用ParallelWork, 便于存在重传等任务时，等待这些任务的结果返回, 存在依赖关系的任务，放在一个SeriesWork中
+	// ParallelWork *parallelWork = Workflow::create_parallel_work({series}, 1, [&](){
+
+	// });
 
 	wait_group.wait();
 
@@ -329,14 +355,15 @@ std::vector<int> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask 
 	CommContext *ctx;
 	for (size_t i = 0; i < vTasks.size(); ++i)
 	{
-		ctx = new CommContext;
-		series = Workflow::create_series_work(vTasks[i], [](const SeriesWork *subSeries)
-											  {
+		series = Workflow::create_series_work(vTasks[i], [](const SeriesWork *subSeries) {
 			// 打印并行任务启动时间戳
 			char timestamp[32];
 			getDateStamp(timestamp, sizeof(timestamp));
 			CommContext *subctx = (CommContext *)subSeries->get_context();
-			LOG_DEBUG(stderr, "--- ParallelWork subSeries %d end at : %s ---\r\n", subctx->curTaskIndex, timestamp); });
+			LOG_DEBUG(stderr, "--- ParallelWork subSeries %d end at : %s ---\r\n", subctx->curTaskIndex, timestamp);
+		});
+
+		ctx = new CommContext;
 		series->set_context(ctx);
 		parallelWork->add_series(series);
 	}
@@ -381,6 +408,7 @@ void HttpReqWays::base_callback_deal(WFHttpTask *task)
 	int state = task->get_state();
 	int error = task->get_error();
 
+	// 自己的调用流程，此处触发，必定task已经start，series_of默认不为空
 	auto context = (CommContext *)series_of(task)->get_context();
 	switch (state)
 	{
@@ -449,13 +477,81 @@ void HttpReqWays::wget_info_callback(WFHttpTask *task)
 	/* 数据传出*/
 	SeriesWork *series = series_of(task);
 	CommContext *context;
-	if (!series)
+	if (!series)	// 基本不存在此情况
 	{
-		LOG_ERROR(stderr, "This task have not bind context.\n");
+		LOG_ERROR(stderr, "BUG !!! This task have not bind context.\n");
 	}
 	else
 	{
 		context = (CommContext *)series->get_context();
+		if (context->communicate_status != HTTP_ERROR_CODE::SUCCESS)
+		{
+			LOG_DEBUG(stderr, "This Series task running failed at taskIndex: %d .\r\n", context->curTaskIndex);
+			return;
+		}
+		++(context->curTaskIndex);
+	}
+
+	if (task->get_state() != WFT_STATE_SUCCESS)
+	{
+		LOG_ERROR(stderr, "Http Req Error, Error Code: %d.\n", task->get_state());
+		series->cancel();	// 区分场景，SeriesWork中task访问服务器不一定一致，状态并非本地错误，有时不应直接取消后续任务
+		return;
+	}
+
+	/* Get response body. */
+	context->resp_data = protocol::HttpUtil::decode_chunked_body(task->get_resp());
+	// context->communicate_status = HTTP_ERROR_CODE::SUCCESS;
+
+	LOG_DEBUG(stderr, "Print resp data: %s \n", context->resp_data.c_str());
+	{ // 打印当前task结束时间戳
+		char timestamp[32];
+		getDateStamp(timestamp, sizeof(timestamp));
+		LOG_DEBUG(stderr, "--- Series task %d end at : %s ---\r\n", context->curTaskIndex, timestamp);
+	}
+	return;
+}
+
+void HttpReqWays::wget_promise_callback(WFHttpTask *task)
+{
+	base_callback_deal(task);	
+
+	/* 数据传出*/
+	SeriesWork *series = series_of(task);
+	CommContext *context;
+	context = (CommContext *)series->get_context();
+
+	if (context->communicate_status != HTTP_ERROR_CODE::SUCCESS)
+	{	// 重传任务，启动
+		// 场景一 首次触发需要重传，修改任务communicate_status为success
+
+		// for (uint8_t index = context.curTaskIndex; index < vTasks.size(); ++index)
+		// {
+		// 	std::string reqUrl = vTasks[index]->get_req()->get_request_uri();
+		// 	if (g_reQueueMap.find(reqUrl) != g_reQueueMap.end())
+		// 	{
+		// 		auto reSeries = std::move(g_reQueueMap.at(reqUrl));
+		// 		if (reSeries->reQueuePtr != nullptr)
+		// 		{
+		// 			reSeries->reQueuePtr->push_back(vTasks[index]);
+		// 		}
+		// 		else
+		// 		{
+
+		// 		}
+		// 	}
+
+		// }
+	}
+
+
+	if (!series)	
+	{
+		LOG_ERROR(stderr, "BUG !!! This task have not bind context.\n");
+	}
+	else
+	{
+		
 		if (context->communicate_status != HTTP_ERROR_CODE::SUCCESS)
 		{
 			LOG_DEBUG(stderr, "This Series task running failed at taskIndex: %d .\r\n", context->curTaskIndex);

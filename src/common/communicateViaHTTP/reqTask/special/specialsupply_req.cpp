@@ -24,12 +24,6 @@
 namespace communicate::http
 {
 
-struct CommContextAtChunk : public CommContext
-{
-    Resume_FileInfo resumeInfo;
-    std::ofstream outFile;
-};
-
 WFHttpTask *SpecialSupReq::getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
@@ -182,7 +176,7 @@ bool SpecialSupReq::reqToSendChunkDataBySeries(uint8_t &failTaskIndex, std::stri
     std::vector<WFHttpTask *> vTasks;
     for (auto &mem : chunksInfo)
     {   // todo getReqSendTask此处需要修改
-        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, nullptr)));
+        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, true, nullptr)));
     }
 
     return HttpReqWays::reqGetRespBySeries(vTasks, finResult, failTaskIndex);
@@ -194,7 +188,7 @@ bool SpecialSupReq::reqToSendChunkDataByParallel(std::vector<int> &sucTaskIndexs
     std::vector<WFHttpTask *> vTasks;
     for (auto &mem : chunksInfo)
     {
-        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, nullptr)));
+        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, true, nullptr)));
     }
 
     sucTaskIndexs = HttpReqWays::reqGetRespByParallel(vTasks, allResult);

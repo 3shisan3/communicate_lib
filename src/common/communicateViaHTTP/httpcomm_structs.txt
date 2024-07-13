@@ -1,7 +1,10 @@
 #pragma once
 
+#define OFF 0  
+#define ON 1  
 #define ENABLE_THIS_ABILITY ON
 
+// 前置声明
 template<class REQ, class RESP>
 class WFNetworkTask;
 
@@ -13,25 +16,40 @@ namespace protocol
 using WFHttpTask = WFNetworkTask<protocol::HttpRequest, protocol::HttpResponse>;
 typedef struct __json_object json_object_t;
 
+// 编译打包是否输出基础通信数据结构
+#if @EXPOSE_UNIT_HEADER@ == ENABLE_THIS_ABILITY
+#include "multipart_parser.h"
+#else
 namespace communicate
+{
+class MultipartParser;
+}
+#endif
+
+namespace communicate::http
 {
 enum HTTP_ERROR_CODE
 {
     SUCCESS = 0,
+    WAIT_LOCAL_RE,
     /* 通用错误 */
     UNDEFINED_FAILED,
-    SSL_ERROR，
+    SSL_ERROR,
     SYSTEM_ERROR,
-    TASK_ERROR，
+    TASK_ERROR,
     /* 客户端错误 */
-    DNS_ERROR，
+    DNS_ERROR,
     /* 服务端错误 */
     NOREPLY
 };
+} // namespace communicate::http
 
+// 编译打包是否输出分块传输内容
 #if @RESUME_MOUDLE_MAKE@ == ENABLE_THIS_ABILITY
 #include <cstdint>
 
+namespace communicate
+{
 struct Resume_FileInfo
 {
     char resumeName[198];       // 断电续传信息的记录文件名
@@ -41,6 +59,5 @@ struct Resume_FileInfo
     uint32_t chunkSize = 0;     // 分块尺寸
     char commAddr[648];         // 交互的地址   “作为任务划分的key”
 };
-#endif
-
 } // namespace communicate
+#endif
