@@ -32,8 +32,10 @@ namespace communicate::http
 struct ReconnectCfg
 {
     bool enable_features = false;   // 启用重新尝试功能
-    uint32_t max_spaceTime = 120;   // 最大任务重载间隔（单位：秒） 
-    uint8_t max_nums = 3;           // 最大失败任务重载次数
+    uint32_t max_spaceTime = 60;    // 最大任务重连间隔（单位：秒） 
+    uint8_t max_nums = 3;           // 最大失败任务重连次数
+    uint32_t max_waitTime = 0;      // 整个任务流程最多花费时间（单位：秒）（超时直接结束并返回）
+                                    //（0为不考虑任务花费时间，直到重连次数尝试完）
 };
 
 class HttpReqWays
@@ -62,7 +64,7 @@ public:
     static HTTP_ERROR_CODE reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
                                          const std::string &infoStr = "", const std::string &headerInfoStr = "");
 
-
+public:
     /* The following functions are intended for task implementations only. */
 
     static WFHttpTask *getCommonReqTask(const std::string &reqAddr, bool promiseReqSuc, const std::string &reqInfo = "",
@@ -71,22 +73,24 @@ public:
     static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, bool promiseReqSuc, const json_object_t *headerInfo = nullptr);
     static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, bool promiseReqSuc,
                                             const json_object_t *info = nullptr, const json_object_t *headerInfo = nullptr);
-
+    
+    // 以下为同步返回结果方法
     /**
      * @brief 有序请求任务
      *
-     * @param[out] finResult        最终的云端回复
+     * @param[out] allResult        所有任务的云端回复，与入参vTasks序号一致
+     *                              最后结果为失败前最后成功任务的返回
      * @param[out] failTaskIndex    失败任务序号
      * @param[in] vTasks            请求的任务集合
      *
      * @return 请求通讯状态码
      */
-    static HTTP_ERROR_CODE reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::string &finResult, uint8_t &failTaskIndex);
+    static HTTP_ERROR_CODE reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::vector<std::string> &allResult, uint8_t &failTaskIndex);
     /**
      * @brief 有序请求任务（任务之间无依赖关系）
      *
      * @param[in] vTasks            请求的任务集合
-     * @param[out] allResult        所有任务的云端回复，与入参vTasks序号一致
+     * @param[out] allResult        所有任务的云端回复
      *
      * @return 请求失败的任务序号，及状态码
      */
@@ -97,16 +101,21 @@ public:
      * @param[out] allResult        所有任务的云端回复
      * @param[in] vTasks            请求的任务集合
      *
-     * @return 通讯成功任务序号
+     * @return 请求失败的任务序号，及状态码
      */
-    static std::vector<int> reqGetRespByParallel(const std::vector<WFHttpTask *> &vTasks, std::vector<std::string> &allResult);
+    static std::map<int, HTTP_ERROR_CODE> reqGetRespByParallel(const std::vector<WFHttpTask *> &vTasks, std::vector<std::string> &allResult);
+
+    // 以下为异步返回结果方法
+
 
 protected:
     struct CommContext
     {
-        uint8_t curTaskIndex;
-        HTTP_ERROR_CODE communicate_status;
-        std::string resp_data;
+        uint8_t curTaskIndex = 0;
+        HTTP_ERROR_CODE communicate_status = HTTP_ERROR_CODE::SUCCESS;
+        std::vector<std::string> all_resp_data;
+
+        virtual ~CommContext() {} // 主要目的保证dynamic_cast安全的向下类型转换
     };
 
     /**
@@ -122,6 +131,8 @@ protected:
     static void base_callback_deal(WFHttpTask *task);
 
 private:
+    struct MultitaskCommContext;
+
     static inline void debugPrint(protocol::HttpRequest *req, protocol::HttpResponse *resp);
     static void wget_info_callback(WFHttpTask *task);
     // 尽可能保证请求成功的回调

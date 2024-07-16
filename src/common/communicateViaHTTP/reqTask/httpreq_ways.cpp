@@ -42,9 +42,8 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, bool promi
 										  const std::string &reqInfo, const char *methodType, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
-	http_task = WFTaskFactory::create_http_task(reqAddr,
-												REDIRECT_MAX, RETRY_MAX,
-												wget_info_callback);
+	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX,
+												promiseReqSuc ? wget_promise_callback : wget_info_callback);
 	protocol::HttpRequest *req = http_task->get_req();
 
 	req->set_method(methodType);
@@ -105,9 +104,8 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, bool promi
 WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::string &reqAddr, bool promiseReqSuc, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
-	http_task = WFTaskFactory::create_http_task(reqAddr,
-												REDIRECT_MAX, RETRY_MAX,
-												wget_info_callback);
+	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX,
+												promiseReqSuc ? wget_promise_callback : wget_info_callback);
 	protocol::HttpRequest *req = http_task->get_req();
 
 	req->set_method(HttpMethodPost);
@@ -222,7 +220,10 @@ HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string
 	}
 
 	uint8_t temp = 0;
-	return reqGetRespBySeries({http_task}, result, temp);
+	std::vector<std::string> resStrVec;
+	auto res = reqGetRespBySeries({http_task}, resStrVec, temp);
+	result = resStrVec.back();
+	return res;
 }
 
 HTTP_ERROR_CODE HttpReqWays::reqToPostResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo, const std::string &headerInfoStr)
@@ -239,7 +240,10 @@ HTTP_ERROR_CODE HttpReqWays::reqToPostResp(std::string &result, const std::strin
 	}
 
 	uint8_t temp = 0;
-	return reqGetRespBySeries({http_task}, result, temp);
+	std::vector<std::string> resStrVec;
+	auto res = reqGetRespBySeries({http_task}, resStrVec, temp);
+	result = resStrVec.back();
+	return res;
 }
 
 HTTP_ERROR_CODE HttpReqWays::reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
@@ -260,17 +264,25 @@ HTTP_ERROR_CODE HttpReqWays::reqToSendData(std::string &result, const std::strin
 	}
 
 	uint8_t temp = 0;
-	return reqGetRespBySeries({http_task}, result, temp);
+	std::vector<std::string> resStrVec;
+	auto res = reqGetRespBySeries({http_task}, resStrVec, temp);
+	result = resStrVec.back();
+	return res;
 }
 
-HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::string &finResult, uint8_t &failTaskIndex)
+struct HttpReqWays::MultitaskCommContext : public HttpReqWays::CommContext
+{
+	bool taskHasDependency;
+
+	std::map<int, HTTP_ERROR_CODE> failTaskStatus;
+};
+
+HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::vector<std::string> &allResult, uint8_t &failTaskIndex)
 {
 	WFFacilities::WaitGroup wait_group(1);
 	CommContext context;
-	context.curTaskIndex = 0;
-	context.communicate_status = HTTP_ERROR_CODE::SUCCESS;
 
-	auto series_callback = [&wait_group, &finResult, &failTaskIndex](const SeriesWork *series) {
+	auto series_callback = [&wait_group, &allResult, &failTaskIndex](const SeriesWork *series) {
 		CommContext *context = (CommContext *)series->get_context();
 
 		if (context->communicate_status == HTTP_ERROR_CODE::SUCCESS)
@@ -290,7 +302,53 @@ HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> 
 			LOG_INFO(stderr, "--- Series end at : %s ---\r\n", timestamp);
 		}
 
-		finResult = std::move(context->resp_data);
+		allResult = std::move(context->all_resp_data);
+		wait_group.done();
+	};
+
+	// 设置任务series
+	SeriesWork *series = Workflow::create_series_work(vTasks.front(), series_callback);
+	for (auto it = vTasks.begin() + 1; it != vTasks.end(); ++it)
+	{
+		series->push_back(*it);
+	}
+	series->set_context(&context);
+
+	{ // 打印访问启动时间戳
+		char timestamp[32];
+		getDateStamp(timestamp, sizeof(timestamp));
+		LOG_INFO(stderr, "--- Series start at : %s ---\r\n", timestamp);
+	}
+	series->start();
+
+	wait_group.wait();
+
+	return context.communicate_status;
+}
+
+std::map<int, HTTP_ERROR_CODE> HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::vector<std::string> &allResult)
+{
+	WFFacilities::WaitGroup wait_group(1);
+	MultitaskCommContext context;
+	
+	auto series_callback = [&wait_group](const SeriesWork *series) {
+		CommContext *context = (CommContext *)series->get_context();
+
+		if (context->communicate_status == HTTP_ERROR_CODE::SUCCESS)
+		{
+			LOG_INFO(stderr, "Series finished. all success!\n");
+		}
+		else
+		{
+			LOG_INFO(stderr, "Series finished. failed!\n");
+		}
+
+		{ // 打印访问结束时间戳
+			char timestamp[32];
+			getDateStamp(timestamp, sizeof(timestamp));
+			LOG_INFO(stderr, "--- Series end at : %s ---\r\n", timestamp);
+		}
+
 		wait_group.done();
 	};
 
@@ -315,12 +373,13 @@ HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> 
 
 	wait_group.wait();
 
-	return context.communicate_status;
+	allResult = std::move(context.all_resp_data);
+	return context.failTaskStatus;
 }
 
-std::vector<int> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask *> &vTasks, std::vector<std::string> &allResult)
+std::map<int, HTTP_ERROR_CODE> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask *> &vTasks, std::vector<std::string> &allResult)
 {
-	std::vector<int> sucTasks;
+	std::map<int, HTTP_ERROR_CODE> failTasks;
 
 	ParallelWork *parallelWork = Workflow::create_parallel_work([&](const ParallelWork *pwork) {
 		CommContext *context;
@@ -331,13 +390,12 @@ std::vector<int> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask 
 			LOG_DEBUG(stderr, "ParallelWork task index is %d .\n", context->curTaskIndex);
 			if (context->communicate_status == HTTP_ERROR_CODE::SUCCESS)
 			{
-				LOG_DEBUG(stderr, "CurTask resp content is %s .\n", context->resp_data.c_str());
-				sucTasks.emplace_back(context->curTaskIndex);
-				allResult.emplace_back(context->resp_data);
+				LOG_DEBUG(stderr, "CurTask resp content is %s .\n", context->all_resp_data.back().c_str());
+				allResult.emplace_back(context->all_resp_data.back());
 			}
 			else
 			{
-				// failTasks.emplace_back(context->curTaskIndex);
+				failTasks.insert({context->curTaskIndex, context->communicate_status});
 				allResult.emplace_back("");
 			}
 
@@ -364,6 +422,7 @@ std::vector<int> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask 
 		});
 
 		ctx = new CommContext;
+		ctx->curTaskIndex = i;
 		series->set_context(ctx);
 		parallelWork->add_series(series);
 	}
@@ -399,7 +458,7 @@ std::vector<int> HttpReqWays::reqGetRespByParallel(const std::vector<WFHttpTask 
 		cond.wait(lock);
 	lock.unlock(); */
 
-	return sucTasks;
+	return failTasks;
 }
 
 void HttpReqWays::base_callback_deal(WFHttpTask *task)
@@ -486,24 +545,29 @@ void HttpReqWays::wget_info_callback(WFHttpTask *task)
 		context = (CommContext *)series->get_context();
 		if (context->communicate_status != HTTP_ERROR_CODE::SUCCESS)
 		{
+			LOG_ERROR(stderr, "Http Req Error, Error Code: %d.\n", task->get_state());
 			LOG_DEBUG(stderr, "This Series task running failed at taskIndex: %d .\r\n", context->curTaskIndex);
+
+			MultitaskCommContext *ctx = dynamic_cast<MultitaskCommContext *>(context);
+			if (ctx == nullptr)
+			{ // 区分场景，SeriesWork中task访问服务器不一定一致，状态并非本地错误，有时不应直接取消后续任务
+				series->cancel();
+			}
+			else
+			{
+				ctx->failTaskStatus.insert({context->curTaskIndex, context->communicate_status});
+			}
+			
 			return;
 		}
 		++(context->curTaskIndex);
 	}
 
-	if (task->get_state() != WFT_STATE_SUCCESS)
-	{
-		LOG_ERROR(stderr, "Http Req Error, Error Code: %d.\n", task->get_state());
-		series->cancel();	// 区分场景，SeriesWork中task访问服务器不一定一致，状态并非本地错误，有时不应直接取消后续任务
-		return;
-	}
-
 	/* Get response body. */
-	context->resp_data = protocol::HttpUtil::decode_chunked_body(task->get_resp());
-	// context->communicate_status = HTTP_ERROR_CODE::SUCCESS;
+	context->all_resp_data.emplace_back(protocol::HttpUtil::decode_chunked_body(task->get_resp()));
+	context->communicate_status = HTTP_ERROR_CODE::SUCCESS;
 
-	LOG_DEBUG(stderr, "Print resp data: %s \n", context->resp_data.c_str());
+	LOG_DEBUG(stderr, "Print resp data: %s \n", context->all_resp_data.back().c_str());
 	{ // 打印当前task结束时间戳
 		char timestamp[32];
 		getDateStamp(timestamp, sizeof(timestamp));
@@ -568,10 +632,10 @@ void HttpReqWays::wget_promise_callback(WFHttpTask *task)
 	}
 
 	/* Get response body. */
-	context->resp_data = protocol::HttpUtil::decode_chunked_body(task->get_resp());
-	// context->communicate_status = HTTP_ERROR_CODE::SUCCESS;
+	// context->resp_data = protocol::HttpUtil::decode_chunked_body(task->get_resp());
+	context->communicate_status = HTTP_ERROR_CODE::SUCCESS;
 
-	LOG_DEBUG(stderr, "Print resp data: %s \n", context->resp_data.c_str());
+	// LOG_DEBUG(stderr, "Print resp data: %s \n", context->resp_data.c_str());
 	{ // 打印当前task结束时间戳
 		char timestamp[32];
 		getDateStamp(timestamp, sizeof(timestamp));
