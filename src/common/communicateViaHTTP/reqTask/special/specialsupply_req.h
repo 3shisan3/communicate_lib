@@ -69,7 +69,7 @@ public:
     /**
      * @brief 并行发送文件请求（分片传输）
      *
-     * @param[out] failTaskIndexs   成功通信完成的任务序号集合
+     * @param[out] failTaskIndexs   失败的任务序号集合
      * @param[out] allResult        所有任务的云端回复
      * @param[in] chunksInfo        待上传数据信息集合
      * @param[in] reqAddr           请求访问的网址

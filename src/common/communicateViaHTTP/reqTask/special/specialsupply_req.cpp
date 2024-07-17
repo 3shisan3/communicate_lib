@@ -179,10 +179,13 @@ bool SpecialSupReq::reqToSendChunkDataBySeries(uint8_t &failTaskIndex, std::stri
         vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, true, nullptr)));
     }
 
-    return HttpReqWays::reqGetRespBySeries(vTasks, finResult, failTaskIndex);
+    std::vector<std::string> resStrVec;
+	auto res = HttpReqWays::reqGetRespBySeries(vTasks, resStrVec, failTaskIndex);
+	finResult = resStrVec.back();
+	return res == HTTP_ERROR_CODE::SUCCESS;
 }
 
-bool SpecialSupReq::reqToSendChunkDataByParallel(std::vector<int> &sucTaskIndexs, std::vector<std::string> &allResult,
+bool SpecialSupReq::reqToSendChunkDataByParallel(std::vector<int> &failTaskIndexs, std::vector<std::string> &allResult,
                                                  std::vector<MultipartParser> &chunksInfo, const std::string &reqAddr)
 {
     std::vector<WFHttpTask *> vTasks;
@@ -191,9 +194,16 @@ bool SpecialSupReq::reqToSendChunkDataByParallel(std::vector<int> &sucTaskIndexs
         vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, true, nullptr)));
     }
 
-    sucTaskIndexs = HttpReqWays::reqGetRespByParallel(vTasks, allResult);
+    auto failTaskMap = HttpReqWays::reqGetRespByParallel(vTasks, allResult);
+    for (int i = 0; i < vTasks.size(); ++i)
+    {
+        if (failTaskMap.find(i) != failTaskMap.end())
+        {
+            failTaskIndexs.emplace_back(i);
+        }
+    }
 
-    return sucTaskIndexs.empty();
+    return failTaskIndexs.empty();
 }
 
 void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
@@ -222,7 +232,6 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
 	if (task->get_state() != WFT_STATE_SUCCESS)
 	{
 		LOG_ERROR(stderr, "WFT_STATE Error.\n");
-		// context->communicate_status = false;
 		series->cancel();
 		return;
 	}
@@ -245,9 +254,10 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
         return;
     }
 	/* Get response body. */
-	context->resp_data = protocol::HttpUtil::decode_chunked_body(task->get_resp());
+    // 不浪费空间，复用
+	context->all_resp_data.back() = protocol::HttpUtil::decode_chunked_body(task->get_resp());
 	// context->communicate_status = true;
-    if (context->resp_data.empty())
+    if (context->all_resp_data.back().empty())
     {
         LOG_ERROR(stderr, "The response to this request is empty !\n");
         // context->communicate_status = false;
@@ -284,7 +294,7 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
         temp.seekg(context->resumeInfo.lastEndPos, std::ios::beg);
         if (temp.is_open())
         {
-            if (context->outFile.tellp() >= CHECK_BYTES_NUMBER && !checkPreviousBytes(temp, CHECK_BYTES_NUMBER, context->resp_data.substr(0, CHECK_BYTES_NUMBER)))
+            if (context->outFile.tellp() >= CHECK_BYTES_NUMBER && !checkPreviousBytes(temp, CHECK_BYTES_NUMBER, context->all_resp_data.back().substr(0, CHECK_BYTES_NUMBER)))
             {
                 temp.close();
                 LOG_WARNING(stderr, "The file for breakpoint continuation was modified during the writing process !\n");
@@ -302,10 +312,10 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
                 {
                     // std::ios::app 模式下，无法支持这样写入数据，依旧会在尾部添加，只能调整字符串
                     // context->outFile.seekp(context->outFile.tellp() - (std::streampos)CHECK_BYTES_NUMBER, std::ios::beg);
-                    context->resp_data.erase(0, 10);
+                    context->all_resp_data.back().erase(0, 10);
                 }
                 // 写入文件
-                context->outFile.write(context->resp_data.c_str(), context->resp_data.size());
+                context->outFile.write(context->all_resp_data.back().c_str(), context->all_resp_data.back().size());
                 context->outFile.flush();
                 
                 // todo 自旋锁进行读取生成hash并保存
@@ -323,7 +333,7 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
     // 采用阻塞形式存入当前下载状态（当前忽略篡改的影响，不记录hash）
     ChunkManager::getInstance()->saveDownTaskInfo(context->resumeInfo, context->resumeInfo.resumeName);
 
-    LOG_DEBUG(stderr, "Print resp data: %s \n", context->resp_data.c_str());
+    LOG_DEBUG(stderr, "Print resp data: %s \n", context->all_resp_data.back().c_str());
 	{ // 打印当前task结束时间戳
 		char timestamp[32];
 		getDateStamp(timestamp, sizeof(timestamp));
