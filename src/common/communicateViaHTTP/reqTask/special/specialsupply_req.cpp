@@ -175,8 +175,8 @@ bool SpecialSupReq::reqToSendChunkDataBySeries(uint8_t &failTaskIndex, std::stri
 {
     std::vector<WFHttpTask *> vTasks;
     for (auto &mem : chunksInfo)
-    {   // todo getReqSendTask此处需要修改
-        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, true, nullptr)));
+    {
+        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, {.enable_features = true})));
     }
 
     std::vector<std::string> resStrVec;
@@ -191,7 +191,7 @@ bool SpecialSupReq::reqToSendChunkDataByParallel(std::vector<int> &failTaskIndex
     std::vector<WFHttpTask *> vTasks;
     for (auto &mem : chunksInfo)
     {
-        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, true, nullptr)));
+        vTasks.emplace_back(std::move(HttpReqWays::getReqSendTask(mem, reqAddr, {.enable_features = true})));
     }
 
     auto failTaskMap = HttpReqWays::reqGetRespByParallel(vTasks, allResult);

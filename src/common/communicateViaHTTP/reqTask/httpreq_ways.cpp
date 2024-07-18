@@ -61,12 +61,20 @@ void HttpReqWays::initHttpReqParams(const std::string &cfgPath)
 }
 
 /* WFHttpTask 本身构造时不涉及SeriesWork，但在start()时会进行构造 */
-WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, bool promiseReqSuc,
+WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const ReconnectCfg &promiseReqSuc,
 										  const std::string &reqInfo, const char *methodType, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
-	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX,
-												promiseReqSuc ? wget_promise_callback : wget_info_callback);
+	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX, [&promiseReqSuc](WFHttpTask *inTask) {
+		if (promiseReqSuc.enable_features)
+		{
+			wget_promise_callback(inTask, promiseReqSuc.max_spaceTime, promiseReqSuc.max_waitTime, promiseReqSuc.max_nums);
+		}
+		else
+		{
+			wget_info_callback(inTask);
+		}
+	});
 	protocol::HttpRequest *req = http_task->get_req();
 
 	req->set_method(methodType);
@@ -124,11 +132,19 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, bool promi
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::string &reqAddr, bool promiseReqSuc, const json_object_t *headerInfo)
+WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc, const json_object_t *headerInfo)
 {
 	WFHttpTask *http_task;
-	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX,
-												promiseReqSuc ? wget_promise_callback : wget_info_callback);
+	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX, [&promiseReqSuc](WFHttpTask *inTask) {
+		if (promiseReqSuc.enable_features)
+		{
+			wget_promise_callback(inTask, promiseReqSuc.max_spaceTime, promiseReqSuc.max_waitTime, promiseReqSuc.max_nums);
+		}
+		else
+		{
+			wget_info_callback(inTask);
+		}
+	});
 	protocol::HttpRequest *req = http_task->get_req();
 
 	req->set_method(HttpMethodPost);
@@ -181,7 +197,7 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, bool promiseReqSuc,
+WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc,
 											  const json_object_t *info, const json_object_t *headerInfo)
 {
 	const char *name;
@@ -234,12 +250,12 @@ HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo);
 	}
 	else
 	{
 		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo, HttpMethodGet, headerInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodGet, headerInfo);
 	}
 
 	uint8_t temp = 0;
@@ -254,12 +270,12 @@ HTTP_ERROR_CODE HttpReqWays::reqToPostResp(std::string &result, const std::strin
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo, HttpMethodPost);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodPost);
 	}
 	else
 	{
 		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg.enable_features, reqInfo, HttpMethodPost, headerInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodPost, headerInfo);
 	}
 
 	uint8_t temp = 0;
@@ -278,12 +294,12 @@ HTTP_ERROR_CODE HttpReqWays::reqToSendData(std::string &result, const std::strin
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqSendTask(filePaths, reqAddr, info);
+		http_task = getCommonReqSendTask(filePaths, reqAddr, g_reconnectCfg, info);
 	}
 	else
 	{
 		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqSendTask(filePaths, reqAddr, info, headerInfo);
+		http_task = getCommonReqSendTask(filePaths, reqAddr, g_reconnectCfg, info, headerInfo);
 	}
 
 	uint8_t temp = 0;
@@ -601,7 +617,7 @@ void HttpReqWays::wget_info_callback(WFHttpTask *task)
 	return;
 }
 
-void HttpReqWays::wget_promise_callback(WFHttpTask *task)
+void HttpReqWays::wget_promise_callback(WFHttpTask *task, int maxSpaceTime, int maxWaitTime, int maxRetryNum)
 {
 	base_callback_deal(task);	
 
@@ -651,7 +667,7 @@ void HttpReqWays::wget_promise_callback(WFHttpTask *task)
 				series->cancel();
 			}
 			series->push_front(task);
-			series->push_front(WFTaskFactory::create_timer_task(waitTime, 0, [waitTime, retryNum](WFTimerTask *timeTask){
+			series->push_front(WFTaskFactory::create_timer_task(waitTime, 0, [waitTime, retryNum](WFTimerTask *timeTask) {
 				LOG_INFO(stderr, "Complete the %d second wait and start the %d retry of the task\n", waitTime, retryNum);
 			}));
 		}

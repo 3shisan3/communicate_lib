@@ -67,11 +67,11 @@ public:
 public:
     /* The following functions are intended for task implementations only. */
 
-    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, bool promiseReqSuc, const std::string &reqInfo = "",
+    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {}, const std::string &reqInfo = "",
                                         const char *methodType = "GET", const json_object_t *headerInfo = nullptr);
 
-    static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, bool promiseReqSuc, const json_object_t *headerInfo = nullptr);
-    static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, bool promiseReqSuc,
+    static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {}, const json_object_t *headerInfo = nullptr);
+    static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {},
                                             const json_object_t *info = nullptr, const json_object_t *headerInfo = nullptr);
     
     // 以下为同步返回结果方法
@@ -136,7 +136,7 @@ private:
     static inline void debugPrint(protocol::HttpRequest *req, protocol::HttpResponse *resp);
     static void wget_info_callback(WFHttpTask *task);
     // 尽可能保证请求成功的回调
-    static void wget_promise_callback(WFHttpTask *task);
+    static void wget_promise_callback(WFHttpTask *task, int maxSpaceTime, int maxWaitTime, int maxRetryNum);
 };
 
 }
