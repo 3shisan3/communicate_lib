@@ -14,7 +14,16 @@ namespace protocol
     class HttpResponse;
 } // namespace protocol
 using WFHttpTask = WFNetworkTask<protocol::HttpRequest, protocol::HttpResponse>;
-typedef struct __json_object json_object_t;
+
+#define HttpMethodGet		"GET"
+#define HttpMethodHead		"HEAD"
+#define HttpMethodPost		"POST"
+#define HttpMethodPut		"PUT"
+#define HttpMethodPatch		"PATCH"
+#define HttpMethodDelete	"DELETE"
+#define HttpMethodConnect	"CONNECT"
+#define HttpMethodOptions	"OPTIONS"
+#define HttpMethodTrace		"TRACE"
 
 // 编译打包是否输出基础通信数据结构
 #if @EXPOSE_UNIT_HEADER@ == ENABLE_THIS_ABILITY

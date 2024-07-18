@@ -86,7 +86,7 @@ protected:
         std::ofstream outFile;
     };
 
-    static WFHttpTask *getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo = "", const json_object_t *headerInfo = nullptr);
+    static WFHttpTask *getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfoStr = "");
 
 private:
     static void wget_chunk_callback(WFHttpTask *task);

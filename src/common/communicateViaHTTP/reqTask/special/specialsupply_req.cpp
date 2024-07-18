@@ -24,7 +24,7 @@
 namespace communicate::http
 {
 
-WFHttpTask *SpecialSupReq::getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo, const json_object_t *headerInfo)
+WFHttpTask *SpecialSupReq::getSpecialReqGetTask(const std::string &reqAddr, const std::string &reqInfo, const std::string &headerInfoStr)
 {
 	WFHttpTask *http_task;
 	http_task = WFTaskFactory::create_http_task(reqAddr,
@@ -36,15 +36,45 @@ WFHttpTask *SpecialSupReq::getSpecialReqGetTask(const std::string &reqAddr, cons
 	req->add_header_pair("Accept", "*/*");
 	// req->add_header_pair("User-Agent", "Wget/1.14 (linux-gnu)");
 
-	if (headerInfo != nullptr)
-	{
-		const char *name;
-		const json_value_t *val;
-
-		/* Parse headerInfo to Add header_pair*/
-		json_object_for_each(name, val, headerInfo)
+	if (!headerInfoStr.empty())
+	{	
+		auto headerValue = json_value_parse(headerInfoStr.c_str());
+		auto headerInfo = headerValue == nullptr ? nullptr : json_value_object(headerValue);
+		if (headerInfo != nullptr)
 		{
-			req->add_header_pair((std::string)name, (std::string)json_value_string(val));
+			const char *name;
+			const json_value_t *val;
+
+			/* Parse headerInfo to Add header_pair*/
+			json_object_for_each(name, val, headerInfo)
+			{
+				std::string val_str = "";
+				switch (json_value_type(val))
+				{
+				case JSON_VALUE_STRING:
+					val_str = json_value_string(val);
+					break;
+				case JSON_VALUE_NUMBER:
+				{
+					double tempNum = json_value_number(val);
+					val_str = hasDecimal(tempNum) ? std::to_string(tempNum) :	
+													std::to_string(static_cast<int>(tempNum));
+				}
+				break;
+				case JSON_VALUE_TRUE:
+					val_str = "true";
+					break;
+				case JSON_VALUE_FALSE:
+					val_str = "false";
+					break;
+				default:
+					LOG_WARNING(stderr, "this value handles an exception, "
+										"the type cannot be written to the request content, "
+										"type value %d", json_value_type(val));
+					break;
+				}
+				req->add_header_pair((std::string)name, val_str);
+			}
 		}
 	}
 	/* Add req body info*/
@@ -108,7 +138,6 @@ bool SpecialSupReq::reqToGetChunkDataBySeries(const Resume_FileInfo *curInfo, co
     headerJson.push_back("Range", "bytes=" + downRange);
     headerJson.push_back("Connection", "keep-alive");
     headerJson.push_back("FuncName", "dealDownloadDataReq");
-    json_object_t *headerInfo = json_value_object(json_value_parse(headerJson.dump().c_str()));
     // 设置context信息
     CommContextAtChunk context;
     context.curTaskIndex = 0;
@@ -122,7 +151,7 @@ bool SpecialSupReq::reqToGetChunkDataBySeries(const Resume_FileInfo *curInfo, co
     context.outFile = std::move(out);
     // 设置任务series
 	SeriesWork *series = Workflow::create_series_work(
-        SpecialSupReq::getSpecialReqGetTask(curInfo->commAddr, reqInfo, headerInfo),
+        SpecialSupReq::getSpecialReqGetTask(curInfo->commAddr, reqInfo, headerJson.dump()),
         series_callback);
 	series->set_context(&context);
 
@@ -357,10 +386,9 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
     headerJson.push_back("FuncName", "dealDownloadDataReq");
     rangeEnd == curEndPos ? headerJson.push_back("Connection", "close") :
                             headerJson.push_back("Connection", "keep-alive");
-    json_object_t *headerInfo = json_value_object(json_value_parse(headerJson.dump().c_str()));
 
     context->curTaskIndex++;
-    series->push_back(SpecialSupReq::getSpecialReqGetTask(context->resumeInfo.commAddr, "", headerInfo));
+    series->push_back(SpecialSupReq::getSpecialReqGetTask(context->resumeInfo.commAddr, "", headerJson.dump()));
 	return;
 }
 

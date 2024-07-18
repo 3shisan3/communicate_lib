@@ -60,9 +60,14 @@ void HttpReqWays::initHttpReqParams(const std::string &cfgPath)
 	// todo 判断输入配置文件为yaml还是json
 }
 
+void HttpReqWays::startTask(WFHttpTask *task)
+{
+	task->start();
+}
+
 /* WFHttpTask 本身构造时不涉及SeriesWork，但在start()时会进行构造 */
 WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const ReconnectCfg &promiseReqSuc,
-										  const std::string &reqInfo, const char *methodType, const json_object_t *headerInfo)
+										  const std::string &reqInfo, const char *methodType, const std::string &headerInfoStr)
 {
 	WFHttpTask *http_task;
 	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX, [&promiseReqSuc](WFHttpTask *inTask) {
@@ -82,45 +87,58 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const Reco
 	// req->add_header_pair("User-Agent", "Wget/1.14 (linux-gnu)");
 	req->add_header_pair("Connection", "close");
 
-	if (headerInfo != nullptr)
-	{
-		const char *name;
-		const json_value_t *val;
-
-		/* Parse headerInfo to Add header_pair*/
-		json_object_for_each(name, val, headerInfo)
+	if (!headerInfoStr.empty())
+	{	
+		auto headerValue = json_value_parse(headerInfoStr.c_str());
+		auto headerInfo = headerValue == nullptr ? nullptr : json_value_object(headerValue);
+		if (headerInfo != nullptr)
 		{
-			std::string val_str = "";
-			switch (json_value_type(val))
+			const char *name;
+			const json_value_t *val;
+
+			/* Parse headerInfo to Add header_pair*/
+			json_object_for_each(name, val, headerInfo)
 			{
-			case JSON_VALUE_STRING:
-				val_str = json_value_string(val);
-				break;
-			case JSON_VALUE_NUMBER:
+				std::string val_str = "";
+				switch (json_value_type(val))
+				{
+				case JSON_VALUE_STRING:
+					val_str = json_value_string(val);
+					break;
+				case JSON_VALUE_NUMBER:
 				{
 					double tempNum = json_value_number(val);
-					val_str = hasDecimal(tempNum) ? std::to_string(tempNum) :
+					val_str = hasDecimal(tempNum) ? std::to_string(tempNum) :	
 													std::to_string(static_cast<int>(tempNum));
 				}
 				break;
-			case JSON_VALUE_TRUE:
-				val_str = "true";
-				break;
-			case JSON_VALUE_FALSE:
-				val_str = "false";
-				break;
-			default:
-				LOG_WARNING(stderr, "this value handles an exception, "
-					"the type cannot be written to the request content, "
-					"type value %d", json_value_type(val));
-				break;
+				case JSON_VALUE_TRUE:
+					val_str = "true";
+					break;
+				case JSON_VALUE_FALSE:
+					val_str = "false";
+					break;
+				default:
+					LOG_WARNING(stderr, "this value handles an exception, "
+										"the type cannot be written to the request content, "
+										"type value %d", json_value_type(val));
+					break;
+				}
+				req->add_header_pair((std::string)name, val_str);
 			}
-			req->add_header_pair((std::string)name, val_str);
 		}
 	}
 
 	/* Add req body info*/
-	req->add_header_pair("Content-Type", "application/json");	// todo 是否先判断reqInfo是否为json字符串
+	if (json_value_parse(reqInfo.c_str()) != nullptr)
+	{
+		req->add_header_pair("Content-Type", "application/json");
+	}
+	else
+	{	// 默认作为二进制流
+		req->add_header_pair("Content-Type", "application/octet-stream");
+	}
+	
 	req->append_output_body(reqInfo);
 
 	/* Limit the http response size to 20M. */
@@ -132,7 +150,7 @@ WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const Reco
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc, const json_object_t *headerInfo)
+WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc, const std::string &headerInfoStr)
 {
 	WFHttpTask *http_task;
 	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX, [&promiseReqSuc](WFHttpTask *inTask) {
@@ -151,40 +169,44 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 	req->add_header_pair("Accept", "*/*");
 	// req->add_header_pair("User-Agent", "Wget/1.14 (linux-gnu)");
 	// req->add_header_pair("Connection", "keep-alive");
-	if (headerInfo != nullptr)
-	{
-		const char *name;
-		const json_value_t *val;
-
-		/* Parse headerInfo to Add header_pair*/
-		json_object_for_each(name, val, headerInfo)
+	if (!headerInfoStr.empty())
+	{	
+		auto headerValue = json_value_parse(headerInfoStr.c_str());
+		auto headerInfo = headerValue == nullptr ? nullptr : json_value_object(headerValue);
+		if (headerInfo != nullptr)
 		{
-			std::string val_str = "";
-			switch (json_value_type(val))
+			const char *name;
+			const json_value_t *val;
+
+			/* Parse headerInfo to Add header_pair*/
+			json_object_for_each(name, val, headerInfo)
 			{
-			case JSON_VALUE_STRING:
-				val_str = json_value_string(val);
-				break;
-			case JSON_VALUE_NUMBER:
+				std::string val_str = "";
+				switch (json_value_type(val))
+				{
+				case JSON_VALUE_STRING:
+					val_str = json_value_string(val);
+					break;
+				case JSON_VALUE_NUMBER:
 				{
 					double tempNum = json_value_number(val);
-					val_str = hasDecimal(tempNum) ? std::to_string(tempNum) :
-													std::to_string(static_cast<int>(tempNum));
+					val_str = hasDecimal(tempNum) ? std::to_string(tempNum) : std::to_string(static_cast<int>(tempNum));
 				}
 				break;
-			case JSON_VALUE_TRUE:
-				val_str = "true";
-				break;
-			case JSON_VALUE_FALSE:
-				val_str = "false";
-				break;
-			default:
-				LOG_WARNING(stderr, "this value handles an exception, "
-					"the type cannot be written to the request content, "
-					"type value %d", json_value_type(val));
-				break;
+				case JSON_VALUE_TRUE:
+					val_str = "true";
+					break;
+				case JSON_VALUE_FALSE:
+					val_str = "false";
+					break;
+				default:
+					LOG_WARNING(stderr, "this value handles an exception, "
+										"the type cannot be written to the request content, "
+										"type value %d", json_value_type(val));
+					break;
+				}
+				req->add_header_pair((std::string)name, val_str);
 			}
-			req->add_header_pair((std::string)name, val_str);
 		}
 	}
 
@@ -197,16 +219,19 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc,
-											  const json_object_t *info, const json_object_t *headerInfo)
+WFHttpTask *HttpReqWays::getCommonReqSendTask(const std::string &filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc,
+											  const std::string &infoStr, const std::string &headerInfoStr)
 {
 	const char *name;
 	const json_value_t *val;
 
 	/* Parse file to Create body*/
 	MultipartParser parser;
-	if (info != nullptr)
+
+	if (json_value_parse(infoStr.c_str()) != nullptr)
 	{
+		auto info = json_value_object(json_value_parse(infoStr.c_str()));
+
 		json_object_for_each(name, val, info)
 		{
 			std::string val_str = "";
@@ -237,12 +262,17 @@ WFHttpTask *HttpReqWays::getCommonReqSendTask(const json_object_t *filePaths, co
 			parser.addParameter((std::string)name, val_str);
 		}
 	}
-	json_object_for_each(name, val, filePaths)
+
+	if (json_value_parse(filePaths.c_str()) != nullptr)
 	{
-		parser.addFile((std::string)name, (std::string)json_value_string(val));
+		auto filePathsObj = json_value_object(json_value_parse(filePaths.c_str()));
+		json_object_for_each(name, val, filePathsObj)
+		{
+			parser.addFile((std::string)name, (std::string)json_value_string(val));
+		}
 	}
 
-	return getReqSendTask(parser, reqAddr, promiseReqSuc, headerInfo);
+	return getReqSendTask(parser, reqAddr, promiseReqSuc, headerInfoStr);
 }
 
 HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo, const std::string &headerInfoStr)
@@ -254,8 +284,7 @@ HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string
 	}
 	else
 	{
-		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodGet, headerInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodGet, headerInfoStr);
 	}
 
 	uint8_t temp = 0;
@@ -275,7 +304,7 @@ HTTP_ERROR_CODE HttpReqWays::reqToPostResp(std::string &result, const std::strin
 	else
 	{
 		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodPost, headerInfo);
+		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodPost, headerInfoStr);
 	}
 
 	uint8_t temp = 0;
@@ -288,18 +317,14 @@ HTTP_ERROR_CODE HttpReqWays::reqToPostResp(std::string &result, const std::strin
 HTTP_ERROR_CODE HttpReqWays::reqToSendData(std::string &result, const std::string &filePathsStr, const std::string &reqAddr,
 								const std::string &infoStr, const std::string &headerInfoStr)
 {
-	json_object_t * filePaths = json_value_object(json_value_parse(filePathsStr.c_str()));
-	json_object_t * info = json_value_object(json_value_parse(infoStr.c_str()));
-
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqSendTask(filePaths, reqAddr, g_reconnectCfg, info);
+		http_task = getCommonReqSendTask(filePathsStr, reqAddr, g_reconnectCfg, infoStr);
 	}
 	else
 	{
-		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqSendTask(filePaths, reqAddr, g_reconnectCfg, info, headerInfo);
+		http_task = getCommonReqSendTask(filePathsStr, reqAddr, g_reconnectCfg, infoStr, headerInfoStr);
 	}
 
 	uint8_t temp = 0;

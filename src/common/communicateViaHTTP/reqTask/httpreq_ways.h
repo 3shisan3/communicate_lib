@@ -67,12 +67,23 @@ public:
 public:
     /* The following functions are intended for task implementations only. */
 
+    /**
+     * @brief 获取任务接口主要入参描述
+     *
+     * @param[in] filePaths         以文件名为key，文件地址为value组成的json字符串
+     * @param[in] reqInfo           请求时和云端商定所需要发送的信息（未强制要求json）
+     * @param[in] headerInfoStr     请求需要额外增添的头信息(json字符串）
+     * @param[in] infoStr           发送时和云端商定所需要除文件信息外额外要求附带的信息（此处混合文件数据的处理，要求必须为json）
+     *
+     * @return 生成的任务，可直接start启动，亦可添加到后续请求队列中
+     */
     static WFHttpTask *getCommonReqTask(const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {}, const std::string &reqInfo = "",
-                                        const char *methodType = "GET", const json_object_t *headerInfo = nullptr);
+                                        const char *methodType = HttpMethodGet, const std::string &headerInfoStr = "");
+    static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {}, const std::string &headerInfoStr = "");
+    static WFHttpTask *getCommonReqSendTask(const std::string &filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {},
+                                            const std::string &infoStr = "", const std::string &headerInfoStr = "");
 
-    static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {}, const json_object_t *headerInfo = nullptr);
-    static WFHttpTask *getCommonReqSendTask(const json_object_t *filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {},
-                                            const json_object_t *info = nullptr, const json_object_t *headerInfo = nullptr);
+    static void startTask(WFHttpTask *task);    // 主要通过日志打印，判断任务执行，暂不提供其他接口（测试使用）
     
     // 以下为同步返回结果方法
     /**
