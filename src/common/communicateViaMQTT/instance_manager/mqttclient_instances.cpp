@@ -172,7 +172,7 @@ bool MqttClientIns::toPublishTopicMsg(const std::string &brokerAddr, const std::
         return false;
     }
 
-    // retain 是否保留消息，已确保必定被订阅收到(每个Client订阅Topic后会立即读取到retain消息，不必要等待发送)
+    // retain 是否保留消息，以确保必定有消息被订阅收到(每个Client订阅Topic后会立即读取到retain消息，不必等待发送)
     return iter->second->publish(mid, sub, msgContent.size(), msgContent.c_str(), qos, g_pubRetain) == mosq_err_t::MOSQ_ERR_SUCCESS;
 }
 

@@ -77,11 +77,11 @@ public:
      *
      * @return 生成的任务，可直接start启动，亦可添加到后续请求队列中
      */
-    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {}, const std::string &reqInfo = "",
+    static WFHttpTask *getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo = "", const ReconnectCfg &promiseReqSuc = {},
                                         const char *methodType = HttpMethodGet, const std::string &headerInfoStr = "");
     static WFHttpTask *getReqSendTask(MultipartParser &parser, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {}, const std::string &headerInfoStr = "");
-    static WFHttpTask *getCommonReqSendTask(const std::string &filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc = {},
-                                            const std::string &infoStr = "", const std::string &headerInfoStr = "");
+    static WFHttpTask *getCommonReqSendTask(const std::string &filePaths, const std::string &reqAddr, const std::string &infoStr = "",
+                                            const ReconnectCfg &promiseReqSuc = {}, const std::string &headerInfoStr = "");
 
     static void startTask(WFHttpTask *task);    // 主要通过日志打印，判断任务执行，暂不提供其他接口（测试使用）
     

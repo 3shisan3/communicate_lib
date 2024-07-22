@@ -1,5 +1,6 @@
 #include "httpreq_ways.h"
 
+#include <deque>
 #include <memory>
 
 #include <HttpMessage.h>
@@ -22,11 +23,11 @@ namespace communicate::http
 ReconnectCfg g_reconnectCfg = {};
 struct ReTaskManager
 {
-	uint8_t reCount = 0;
+	// uint8_t reCount = 0;
+	std::deque<int> taskIndexVec;
 	SeriesWork *reQueuePtr = nullptr;
 };
-// key 当前为访问链接
-std::map<std::string, std::unique_ptr<ReTaskManager>> g_reQueueMap;
+
 
 int calculateSumWaitTime(int firstTime, int maxSpendTime, int retryNum)
 {
@@ -66,8 +67,8 @@ void HttpReqWays::startTask(WFHttpTask *task)
 }
 
 /* WFHttpTask 本身构造时不涉及SeriesWork，但在start()时会进行构造 */
-WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const ReconnectCfg &promiseReqSuc,
-										  const std::string &reqInfo, const char *methodType, const std::string &headerInfoStr)
+WFHttpTask *HttpReqWays::getCommonReqTask(const std::string &reqAddr, const std::string &reqInfo,
+										  const ReconnectCfg &promiseReqSuc, const char *methodType, const std::string &headerInfoStr)
 {
 	WFHttpTask *http_task;
 	http_task = WFTaskFactory::create_http_task(reqAddr, REDIRECT_MAX, RETRY_MAX, [&promiseReqSuc](WFHttpTask *inTask) {
@@ -219,8 +220,8 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 	return http_task;
 }
 
-WFHttpTask *HttpReqWays::getCommonReqSendTask(const std::string &filePaths, const std::string &reqAddr, const ReconnectCfg &promiseReqSuc,
-											  const std::string &infoStr, const std::string &headerInfoStr)
+WFHttpTask *HttpReqWays::getCommonReqSendTask(const std::string &filePaths, const std::string &reqAddr, const std::string &infoStr,
+											  const ReconnectCfg &promiseReqSuc, const std::string &headerInfoStr)
 {
 	const char *name;
 	const json_value_t *val;
@@ -280,11 +281,11 @@ HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo);
+		http_task = getCommonReqTask(reqAddr, reqInfo, g_reconnectCfg);
 	}
 	else
 	{
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodGet, headerInfoStr);
+		http_task = getCommonReqTask(reqAddr, reqInfo, g_reconnectCfg, HttpMethodGet, headerInfoStr);
 	}
 
 	uint8_t temp = 0;
@@ -299,12 +300,12 @@ HTTP_ERROR_CODE HttpReqWays::reqToPostResp(std::string &result, const std::strin
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodPost);
+		http_task = getCommonReqTask(reqAddr, reqInfo, g_reconnectCfg, HttpMethodPost);
 	}
 	else
 	{
 		json_object_t * headerInfo = json_value_object(json_value_parse(headerInfoStr.c_str()));
-		http_task = getCommonReqTask(reqAddr, g_reconnectCfg, reqInfo, HttpMethodPost, headerInfoStr);
+		http_task = getCommonReqTask(reqAddr, reqInfo, g_reconnectCfg, HttpMethodPost, headerInfoStr);
 	}
 
 	uint8_t temp = 0;
@@ -320,11 +321,11 @@ HTTP_ERROR_CODE HttpReqWays::reqToSendData(std::string &result, const std::strin
 	WFHttpTask *http_task;
 	if (headerInfoStr.empty())
 	{
-		http_task = getCommonReqSendTask(filePathsStr, reqAddr, g_reconnectCfg, infoStr);
+		http_task = getCommonReqSendTask(filePathsStr, reqAddr, infoStr, g_reconnectCfg);
 	}
 	else
 	{
-		http_task = getCommonReqSendTask(filePathsStr, reqAddr, g_reconnectCfg, infoStr, headerInfoStr);
+		http_task = getCommonReqSendTask(filePathsStr, reqAddr, infoStr, g_reconnectCfg, headerInfoStr);
 	}
 
 	uint8_t temp = 0;
@@ -339,6 +340,7 @@ struct HttpReqWays::MultitaskCommContext : public HttpReqWays::CommContext
 	// bool taskHasDependency;		// 使用此结构，默认任务之间不存在依赖
 
 	std::map<int, HTTP_ERROR_CODE> failTaskStatus;
+	std::map<std::string, std::shared_ptr<ReTaskManager>> reQueueMap;
 };
 
 HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::vector<std::string> &allResult, uint8_t &failTaskIndex)
@@ -395,25 +397,15 @@ std::map<int, HTTP_ERROR_CODE> HttpReqWays::reqGetRespBySeries(const std::vector
 	WFFacilities::WaitGroup wait_group(1);
 	MultitaskCommContext context;
 	
-	auto series_callback = [&wait_group](const SeriesWork *series) {
-		CommContext *context = (CommContext *)series->get_context();
-
-		if (context->communicate_status == HTTP_ERROR_CODE::SUCCESS)
-		{
-			LOG_INFO(stderr, "Series finished. all success!\n");
-		}
-		else
-		{
-			LOG_INFO(stderr, "Series finished. has failed!\n");
-		}
+	auto series_callback = [&](const SeriesWork *series) {	
+		// CommContext *context = (CommContext *)series->get_context();
+		// allResult = context->all_resp_data;		// 如果拓展promise，异步等，需要提前得到结果可能需要
 
 		{ // 打印访问结束时间戳
 			char timestamp[32];
 			getDateStamp(timestamp, sizeof(timestamp));
-			LOG_INFO(stderr, "--- Series end at : %s ---\r\n", timestamp);
+			LOG_INFO(stderr, "--- Main series end at : %s ---\r\n", timestamp);
 		}
-
-		wait_group.done();
 	};
 
 	// 设置任务series
@@ -429,11 +421,12 @@ std::map<int, HTTP_ERROR_CODE> HttpReqWays::reqGetRespBySeries(const std::vector
 		getDateStamp(timestamp, sizeof(timestamp));
 		LOG_INFO(stderr, "--- Series start at : %s ---\r\n", timestamp);
 	}
-	series->start();
 	// 使用ParallelWork, 便于存在重传等任务时，等待这些任务的结果返回, 存在依赖关系的任务，放在一个SeriesWork中
-	// ParallelWork *parallelWork = Workflow::create_parallel_work({series}, 1, [&](){
-
-	// });
+	ParallelWork *parallelWork = Workflow::create_parallel_work([&wait_group](const ParallelWork *pwork) {
+		wait_group.done();
+	});
+	parallelWork->add_series(series);
+	parallelWork->start();
 
 	wait_group.wait();
 
@@ -601,6 +594,10 @@ void HttpReqWays::wget_info_callback(WFHttpTask *task)
 	/* 数据传出*/
 	SeriesWork *series = series_of(task);
 	CommContext *context;
+	/* Get response body. */
+	context->all_resp_data.emplace_back(protocol::HttpUtil::decode_chunked_body(task->get_resp()));
+	LOG_DEBUG(stderr, "Print resp data: %s \n", context->all_resp_data.back().c_str());
+
 	if (!series)	// 基本不存在此情况
 	{
 		LOG_ERROR(stderr, "BUG !!! This task have not bind context.\n");
@@ -621,7 +618,6 @@ void HttpReqWays::wget_info_callback(WFHttpTask *task)
 			else
 			{
 				ctx->failTaskStatus.insert({context->curTaskIndex, context->communicate_status});
-				ctx->all_resp_data.emplace_back("");
 			}
 			
 			return;
@@ -629,11 +625,6 @@ void HttpReqWays::wget_info_callback(WFHttpTask *task)
 		++(context->curTaskIndex);
 	}
 
-	/* Get response body. */
-	context->all_resp_data.emplace_back(protocol::HttpUtil::decode_chunked_body(task->get_resp()));
-	context->communicate_status = HTTP_ERROR_CODE::SUCCESS;
-
-	LOG_DEBUG(stderr, "Print resp data: %s \n", context->all_resp_data.back().c_str());
 	{ // 打印当前task结束时间戳
 		char timestamp[32];
 		getDateStamp(timestamp, sizeof(timestamp));
@@ -650,8 +641,13 @@ void HttpReqWays::wget_promise_callback(WFHttpTask *task, int maxSpaceTime, int 
 	SeriesWork *series = series_of(task);
 	CommContext *context;
 	context = (CommContext *)series->get_context();
+	/* Get response body. */
+	context->all_resp_data.emplace_back(protocol::HttpUtil::decode_chunked_body(task->get_resp()));
+	LOG_DEBUG(stderr, "Print resp data: %s \n", context->all_resp_data.back().c_str());
 
 	WFCounterTask *noteTask = dynamic_cast<WFCounterTask *>(series->get_last_task());
+	std::string curTaskUrl = task->get_req()->get_request_uri();
+
 	if (context->communicate_status != HTTP_ERROR_CODE::SUCCESS)
 	{	// 重传任务，启动
 		LOG_ERROR(stderr, "Http Req Error, Error Code: %d.\n", task->get_state());
@@ -663,8 +659,8 @@ void HttpReqWays::wget_promise_callback(WFHttpTask *task, int maxSpaceTime, int 
 			if (noteTask == nullptr)
 			{	// 当前任务还未进行过重传, 增加如果每个任务有单独设置重传次数，则入参随之更改
 				int *intPtr = new int(1);
-				series->set_last_task(WFTaskFactory::create_counter_task(g_reconnectCfg.max_nums, [&series, &intPtr](WFCounterTask *countTask){
-					LOG_INFO(stderr, "This task has reached the maximum number of reconnections\n");
+				series->set_last_task(WFTaskFactory::create_counter_task(maxRetryNum, [&series, &intPtr, maxRetryNum](WFCounterTask *countTask){
+					LOG_WARNING(stderr, "This task has reached the maximum number: %d of reconnections\n", maxRetryNum);
 					series->cancel();
 					
 					countTask->user_data = nullptr;
@@ -681,41 +677,95 @@ void HttpReqWays::wget_promise_callback(WFHttpTask *task, int maxSpaceTime, int 
 			}
 
 			if (series->is_canceled())
-			{
+			{ 
 				return;
 			}
 			int retryNum = *(static_cast<int *>(noteTask->user_data));
-			int waitTime = calculateSumWaitTime(FIRST_WAIT_TIME, g_reconnectCfg.max_spaceTime, retryNum);
-			if (waitTime > g_reconnectCfg.max_waitTime)
+			int waitTime = calculateSumWaitTime(FIRST_WAIT_TIME, maxSpaceTime, retryNum);
+			if (maxWaitTime != 0 && waitTime > maxWaitTime)
 			{
-				LOG_INFO(stderr, "This task has taken too long and exceeded the limit %d s\n", g_reconnectCfg.max_waitTime);
+				LOG_WARNING(stderr, "This task has taken too long and exceeded the limit %d s\n", maxWaitTime);
 				series->cancel();
 			}
-			series->push_front(task);
+			series->push_front(task);	// 极为罕见会出现，排除服务端问题，在同一环境同一设备上访问相同网址会出现不同状态，故使用push_front尝试一个任务即可
 			series->push_front(WFTaskFactory::create_timer_task(waitTime, 0, [waitTime, retryNum](WFTimerTask *timeTask) {
 				LOG_INFO(stderr, "Complete the %d second wait and start the %d retry of the task\n", waitTime, retryNum);
 			}));
 		}
 		else
 		{	// 任务不存在依赖，新创建队列，并行进行再次请求
+			int curDealTaskIndex = context->curTaskIndex;
+			ctx->failTaskStatus.insert({curDealTaskIndex, HTTP_ERROR_CODE::WAIT_LOCAL_RE});	// 先改状态
+			// 列出新建任务队列情况, 此时任务来源必为main series, curDealTaskIndex值有效
+			if (ctx->reQueueMap.find(curTaskUrl) == ctx->reQueueMap.end())
+			{
+				// 创建新的任务队列
+				auto newSeries = Workflow::create_series_work(task, [&ctx, &curTaskUrl](const SeriesWork *series){
+					CommContext *subContext = (CommContext *)series->get_context();
+					if (subContext->communicate_status != HTTP_ERROR_CODE::SUCCESS)
+					{
+						for (const auto &index : ctx->reQueueMap.at(curTaskUrl)->taskIndexVec)
+						{
+							ctx->failTaskStatus[index] = subContext->communicate_status;
+						}
+						ctx->reQueueMap.erase(curTaskUrl);
+					}
+					else
+					{
+						for (const auto &index : ctx->reQueueMap.at(curTaskUrl)->taskIndexVec)
+						{
+							ctx->failTaskStatus.erase(index);
+						}
+						ctx->reQueueMap[curTaskUrl]->reQueuePtr = nullptr;	// 便于主series中又有同样的任务在此周期内仍去尝试reconnect
+					}
+				});
+				CommContext subContext;
+				newSeries->set_context(&subContext);	// task再次触发回调就会走上面的if
+				int *intPtr = new int(1);
+				newSeries->set_last_task(WFTaskFactory::create_counter_task(maxRetryNum, [&newSeries, &intPtr, maxRetryNum](WFCounterTask *countTask){
+					LOG_WARNING(stderr, "This sub task has reached the maximum number: %d of reconnections\n", maxRetryNum);
+					newSeries->cancel();
+					
+					countTask->user_data = nullptr;
+					delete intPtr;
+				}));
+				noteTask = (WFCounterTask *)series->get_last_task();
+				noteTask->user_data = static_cast<void *>(intPtr);
 
+				const ParallelTask *parallel = series->get_in_parallel();	// 获取当前task所执行的parallelwork
+				auto parallelPtr = dynamic_cast<ParallelWork *>(const_cast<ParallelTask *>(parallel));
+				if (parallelPtr != nullptr)
+				{
+					parallelPtr->add_series(newSeries);
+				}
+
+				ctx->reQueueMap[curTaskUrl] = std::make_shared<ReTaskManager>();
+				ctx->reQueueMap[curTaskUrl]->reQueuePtr = newSeries;
+				ctx->reQueueMap[curTaskUrl]->taskIndexVec.emplace_back(curDealTaskIndex);
+			}
+			else if (ctx->reQueueMap[curTaskUrl]->reQueuePtr == nullptr && !ctx->reQueueMap[curTaskUrl]->taskIndexVec.empty())
+			{
+				ctx->failTaskStatus.insert({curDealTaskIndex, ctx->failTaskStatus[ctx->reQueueMap[curTaskUrl]->taskIndexVec.front()]});
+			}
+			else
+			{
+				ctx->reQueueMap[curTaskUrl]->reQueuePtr->push_back(task);
+			}
+			
+			++(context->curTaskIndex);	// 任务序号加一，主series继续下一个任务
 		}
 
 		return;
 	}
 	
 	if (noteTask != nullptr)
-	{	// 重新计数
+	{	// 重新计数, 且避免自己加入的count任务阻塞series
 		series->unset_last_task();
 	}
 
 	++(context->curTaskIndex);
 
-	/* Get response body. */
-	context->all_resp_data.emplace_back(protocol::HttpUtil::decode_chunked_body(task->get_resp()));
-	context->communicate_status = HTTP_ERROR_CODE::SUCCESS;
-
-	LOG_DEBUG(stderr, "Print resp data: %s \n", context->all_resp_data.back().c_str());
+	
 	{ // 打印当前task结束时间戳
 		char timestamp[32];
 		getDateStamp(timestamp, sizeof(timestamp));
