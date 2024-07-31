@@ -16,6 +16,7 @@ Version history
 #ifndef HTTPREQ_WAYS_H
 #define HTTPREQ_WAYS_H
 
+#include <functional>
 #include <map>
 #include <netdb.h>
 #include <signal.h>
@@ -43,7 +44,7 @@ class HttpReqWays
 public:
     // 控制全局默认的重试状态
     static void initHttpReqParams(const ReconnectCfg &cfg);
-    static void initHttpReqParams(const std::string &cfgPath);
+    static void initHttpReqParams(const std::string &cfgPath);  // 配置项不多，引入配置文件增加程序复杂度，暂不实现
     
     //
     static HTTP_ERROR_CODE reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo = "", const std::string &headerInfo = "");
@@ -116,8 +117,16 @@ public:
      */
     static std::map<int, HTTP_ERROR_CODE> reqGetRespByParallel(const std::vector<WFHttpTask *> &vTasks, std::vector<std::string> &allResult);
 
-    // 以下为异步返回结果方法
-
+    // 设置多任务请求执行过程中处理任务状态的函数
+    /**
+     * @brief 设置每个任务执行后状态记录的处理方法
+     *
+     * @param[in] func              替换默认方法，外部输入
+     * @param[in] func->tuple       first为请求url，second为taskId, 两者合为key；third为value
+     * 
+     */
+    using noteTasksStatusCallback = std::function<void(const std::tuple<std::string, std::string, HTTP_ERROR_CODE> &)>;
+    static void setTaskStatusFunc(const noteTasksStatusCallback &func);
 
 protected:
     struct CommContext
@@ -129,15 +138,8 @@ protected:
         virtual ~CommContext() {} // 主要目的保证dynamic_cast安全的向下类型转换
     };
 
-    /**
-     * @brief 并行请求任务
-     *
-     * @param[out] allResult        所有任务的云端回复
-     * @param[in] vTasks            请求的任务集合
-     *
-     * @return 通讯成功任务序号
-     */
-    static HTTP_ERROR_CODE createReTasksSeries();
+    // 默认是通过请求信息使用sha256计算获得唯一标识
+    static std::string obtain_task_id(WFHttpTask *task);
 
     static void base_callback_deal(WFHttpTask *task);
 
@@ -148,6 +150,9 @@ private:
     static void wget_info_callback(WFHttpTask *task);
     // 尽可能保证请求成功的回调
     static void wget_promise_callback(WFHttpTask *task, int maxSpaceTime, int maxWaitTime, int maxRetryNum);
+
+    // 网络请求执行过程中去获取任务状态，操作函数
+    static noteTasksStatusCallback statusCallbackFunc;
 };
 
 }

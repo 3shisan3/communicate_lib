@@ -12,6 +12,28 @@
 
 #include "logconfig.h"
 
+// 函数用于将字节数组转换为十六进制字符串
+inline std::string bytesToHex(const unsigned char *bytes, size_t len)
+{
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    for (size_t i = 0; i < len; i++)
+    {
+        ss << std::setw(2) << (int)bytes[i];
+    }
+    return ss.str();
+}
+
+static std::string get_sha256Hex(const std::string &oriStr)
+{
+    unsigned char hash[SHA256_DIGEST_LENGTH];  
+    SHA256_CTX sha256;  
+    SHA256_Init(&sha256);  
+    SHA256_Update(&sha256, oriStr.c_str(), oriStr.size());  
+    SHA256_Final(hash, &sha256);  
+    return bytesToHex(hash, SHA256_DIGEST_LENGTH);  
+}
+
 static std::string get_sha256Hex_Range(const std::string &filePath, const long long &startPos, const long long &endPos)
 {
     std::ifstream file(filePath, std::ios::binary);
@@ -32,7 +54,6 @@ static std::string get_sha256Hex_Range(const std::string &filePath, const long l
     constexpr size_t bufferSize = 8192;
     char buffer[bufferSize];
     while ((endPos - file.tellg()) - bufferSize > bufferSize)
-        ;
     {
         file.read(buffer, bufferSize);
         SHA256_Update(&sha256Context, buffer, bufferSize);
