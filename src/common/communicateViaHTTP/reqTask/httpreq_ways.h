@@ -153,6 +153,7 @@ private:
 
     // 网络请求执行过程中去获取任务状态，操作函数
     static noteTasksStatusCallback statusCallbackFunc;
+    static void noteTaskStatus(WFHttpTask *task, HTTP_ERROR_CODE status);
 };
 
 }

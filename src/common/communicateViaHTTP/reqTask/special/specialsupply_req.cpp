@@ -271,7 +271,7 @@ void SpecialSupReq::wget_chunk_callback(WFHttpTask *task)
     resp_cursor.find("Content-Range", contentRange);
     if (contentRange.empty())
     {   // 分段下载场景下，此处一定会有信息
-        context->communicate_status = HTTP_ERROR_CODE::UNDEFINED_FAILED;
+        context->communicate_status = HTTP_ERROR_CODE::NOREPLY;
         LOG_ERROR(stderr, "The resume task has not content-range !\n");
         return;
     }

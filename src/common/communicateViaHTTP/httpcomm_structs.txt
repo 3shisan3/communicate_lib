@@ -42,7 +42,7 @@ enum HTTP_ERROR_CODE
     SUCCESS = 0,
     WAIT_LOCAL_RE,
     /* 通用错误 */
-    UNDEFINED_FAILED,
+    UNDEFINED,
     SSL_ERROR,
     SYSTEM_ERROR,
     TASK_ERROR,
@@ -61,8 +61,8 @@ namespace communicate
 {
 struct Resume_FileInfo
 {
-    char resumeName[198];       // 断电续传信息的记录文件名
-    char filePath[328];         // 记录信息的目标文件路径
+    char resumeName[198];       // 记录断点续传信息的文件名
+    char filePath[328];         // 目标文件的路径
     char fileHash[68];          // 锁定文件的hash值
     long long lastEndPos = 0;   // 最终处理结束的下标
     uint32_t chunkSize = 0;     // 分块尺寸

@@ -17,6 +17,7 @@
 #define REDIRECT_MAX    5
 #define RETRY_MAX       2
 #define FIRST_WAIT_TIME 5	// 秒
+#define DELIMITER		","
 
 namespace communicate::http
 {
@@ -170,7 +171,7 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 	req->set_method(HttpMethodPost);
 	req->add_header_pair("Accept", "*/*");
 	// req->add_header_pair("User-Agent", "Wget/1.14 (linux-gnu)");
-	// req->add_header_pair("Connection", "keep-alive");
+	req->add_header_pair("Connection", "keep-alive");
 	if (!headerInfoStr.empty())
 	{	
 		auto headerValue = json_value_parse(headerInfoStr.c_str());
@@ -212,11 +213,11 @@ WFHttpTask *HttpReqWays::getReqSendTask(MultipartParser &parser, const std::stri
 		}
 	}
 
-	std::string boundary_res = parser.boundary();
-	std::string body_res = parser.GenBodyContent();
+	// std::string boundary_res = parser.boundary();	// 有RVO/NRVO/拷贝省略，但
+	// std::string body_res = parser.GenBodyContent();	// 可能存在不确定的拷贝情况，忽略
 	/* Add req body info*/
-	req->add_header_pair("Content-Type", "multipart/form-data; boundary=" + boundary_res);
-	req->append_output_body(body_res);
+	req->add_header_pair("Content-Type", "multipart/form-data; boundary=" + parser.boundary());
+	req->append_output_body_nocopy(parser.GenBodyContent());
 
 	return http_task;
 }
@@ -274,7 +275,10 @@ WFHttpTask *HttpReqWays::getCommonReqSendTask(const std::string &filePaths, cons
 		}
 	}
 
-	return getReqSendTask(parser, reqAddr, promiseReqSuc, headerInfoStr);
+	WFHttpTask *task = getReqSendTask(parser, reqAddr, promiseReqSuc, headerInfoStr);
+	std::pair<std::string, std::string> noteInfo = {filePaths, infoStr};
+	task->user_data = &noteInfo;
+	return task;
 }
 
 HTTP_ERROR_CODE HttpReqWays::reqToGetResp(std::string &result, const std::string &reqAddr, const std::string &reqInfo, const std::string &headerInfoStr)
@@ -346,6 +350,18 @@ struct HttpReqWays::MultitaskCommContext : public HttpReqWays::CommContext
 
 HttpReqWays::noteTasksStatusCallback HttpReqWays::statusCallbackFunc = nullptr;
 
+void HttpReqWays::noteTaskStatus(WFHttpTask *task, HTTP_ERROR_CODE status)
+{
+	if (statusCallbackFunc != nullptr)
+	{
+		std::string key_first = task->get_req()->get_request_uri();
+		std::string key_second = obtain_task_id(task);
+		HTTP_ERROR_CODE value = status;
+
+		statusCallbackFunc({key_first, key_second, value});
+	}
+}
+
 HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> vTasks, std::vector<std::string> &allResult, uint8_t &failTaskIndex)
 {
 	WFFacilities::WaitGroup wait_group(1);
@@ -380,6 +396,7 @@ HTTP_ERROR_CODE HttpReqWays::reqGetRespBySeries(const std::vector<WFHttpTask *> 
 	for (auto it = vTasks.begin() + 1; it != vTasks.end(); ++it)
 	{
 		series->push_back(*it);
+		noteTaskStatus(*it, HTTP_ERROR_CODE::UNDEFINED);
 	}
 	series->set_context(&context);
 
@@ -416,6 +433,7 @@ std::map<int, HTTP_ERROR_CODE> HttpReqWays::reqGetRespBySeries(const std::vector
 	for (auto it = vTasks.begin() + 1; it != vTasks.end(); ++it)
 	{
 		series->push_back(*it);
+		noteTaskStatus(*it, HTTP_ERROR_CODE::UNDEFINED);
 	}
 	series->set_context(&context);
 
@@ -485,6 +503,8 @@ std::map<int, HTTP_ERROR_CODE> HttpReqWays::reqGetRespByParallel(const std::vect
 		ctx->curTaskIndex = i;
 		series->set_context(ctx);
 		parallelWork->add_series(series);
+
+		noteTaskStatus(vTasks[i], HTTP_ERROR_CODE::UNDEFINED);
 	}
 
 	WFFacilities::WaitGroup wait_group(1);
@@ -557,17 +577,10 @@ void HttpReqWays::base_callback_deal(WFHttpTask *task)
 		break;
 	default:
 		LOG_ERROR(stderr, "Req error, unmanaged error types: %d\n", error);
-		context->communicate_status = HTTP_ERROR_CODE::UNDEFINED_FAILED;
+		context->communicate_status = HTTP_ERROR_CODE::UNDEFINED;
 	}
 
-	if (statusCallbackFunc != nullptr)
-	{
-		std::string key_first = task->get_req()->get_request_uri();
-		std::string key_second = obtain_task_id(task);
-		HTTP_ERROR_CODE value = context->communicate_status;
-
-		statusCallbackFunc({key_first, key_second, value});
-	}
+	noteTaskStatus(task, context->communicate_status);
 
 	/* Print req and resp info*/
 	if (LOG_LEVEL_DEBUG >= GLOBAL_LOG_LEVEL)
@@ -578,10 +591,20 @@ void HttpReqWays::base_callback_deal(WFHttpTask *task)
 
 std::string HttpReqWays::obtain_task_id(WFHttpTask *task)
 {
-	std::string reqInfo = protocol::HttpUtil::decode_chunked_body(task->get_req());
-	LOG_DEBUG(stderr, "Print req info in task: %s \n", reqInfo.c_str());
-
-	return get_sha256Hex(reqInfo);
+	std::string taskKey;
+	if (task->user_data != nullptr)
+	{
+		std::string reqInfo = protocol::HttpUtil::decode_chunked_body(task->get_req());
+		taskKey = get_sha256Hex(reqInfo);
+	}
+	else
+	{
+		std::pair<std::string, std::string> *pair = static_cast<std::pair<std::string, std::string>*>(task->user_data);
+		taskKey = pair->first + DELIMITER + pair->second;
+	}
+	
+	LOG_DEBUG(stderr, "Print task key: %s \n", taskKey.c_str());
+	return taskKey;
 }
 
 void HttpReqWays::debugPrint(protocol::HttpRequest *req, protocol::HttpResponse *resp)
