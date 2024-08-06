@@ -58,6 +58,23 @@ void HttpReqWays::initHttpReqParams(const ReconnectCfg &cfg)
 	g_reconnectCfg = cfg;
 }
 
+void HttpReqWays::initHttpReqParams(const GlobalSetting &cfg)
+{
+	WFGlobalSettings settings = GLOBAL_SETTINGS_DEFAULT;
+	settings.handler_threads = cfg.handler_threads;
+	settings.poller_threads = cfg.poller_threads;
+	settings.hosts_path = cfg.hosts_path;
+	settings.resolv_conf_path = cfg.resolv_conf_path;
+	settings.dns_server_params.connect_timeout = cfg.dns_outTime.connect_timeout;
+	settings.dns_server_params.response_timeout = cfg.dns_outTime.response_timeout;
+	settings.dns_server_params.ssl_connect_timeout = cfg.dns_outTime.ssl_connect_timeout;
+	settings.endpoint_params.connect_timeout = cfg.global_outTime.connect_timeout;
+	settings.endpoint_params.response_timeout = cfg.global_outTime.response_timeout;
+	settings.endpoint_params.ssl_connect_timeout = cfg.global_outTime.ssl_connect_timeout;
+
+	WORKFLOW_library_init(&settings);
+}
+
 void HttpReqWays::initHttpReqParams(const std::string &cfgPath)
 {
 	// todo 判断输入配置文件为yaml还是json

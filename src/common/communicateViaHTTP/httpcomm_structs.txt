@@ -25,6 +25,8 @@ using WFHttpTask = WFNetworkTask<protocol::HttpRequest, protocol::HttpResponse>;
 #define HttpMethodOptions	"OPTIONS"
 #define HttpMethodTrace		"TRACE"
 
+#include <cstdint>
+
 // 编译打包是否输出基础通信数据结构
 #if @EXPOSE_UNIT_HEADER@ == ENABLE_THIS_ABILITY
 #include "multipart_parser.h"
@@ -35,7 +37,26 @@ class MultipartParser;
 }
 #endif
 
-namespace communicate::http
+namespace communicate
+{
+struct TimeOutParams
+{
+    int connect_timeout = 10 * 1000;            // 连接超时限制(单位 ms)
+    int response_timeout = 10 * 1000;           // 等待响应时间(单位 ms)
+    int ssl_connect_timeout = 10 * 1000;        // 与目标完成SSL握手的超时(单位 ms)
+};
+
+struct GlobalSetting
+{
+    TimeOutParams global_outTime;               // 全局默认超时配置
+    TimeOutParams dns_outTime;                  // 触发dns解析时超时配置
+    int handler_threads = 4;                    // 处理网络任务请求及回复处理，线程池数
+    int poller_threads = 4;                     // 负责epoll（kqueue）和消息反序列化，线程池数
+    const char *resolv_conf_path = "/etc/resolv.conf";
+    const char *hosts_path = "/etc/hosts";      // dns配置路径，映射路径，目前需要自定义（主要用于一些无效域名做本地映射使用的场景）
+};
+
+namespace http
 {
 enum HTTP_ERROR_CODE
 {
@@ -51,6 +72,16 @@ enum HTTP_ERROR_CODE
     /* 服务端错误 */
     NOREPLY
 };
+
+struct ReconnectCfg
+{
+    bool enable_features = false;   // 启用重新尝试功能
+    uint32_t max_spaceTime = 60;    // 最大任务重连间隔（单位：秒） 
+    uint8_t max_nums = 3;           // 最大失败任务重连次数
+    uint32_t max_waitTime = 0;      // 整个任务流程最多花费时间（单位：秒）（超时直接结束并返回）
+                                    //（0为不考虑任务花费时间，直到重连次数尝试完）
+};
+} // namespace communicate
 } // namespace communicate::http
 
 // 编译打包是否输出分块传输内容

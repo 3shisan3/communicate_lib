@@ -29,21 +29,13 @@ Version history
 
 namespace communicate::http
 {
-
-struct ReconnectCfg
-{
-    bool enable_features = false;   // 启用重新尝试功能
-    uint32_t max_spaceTime = 60;    // 最大任务重连间隔（单位：秒） 
-    uint8_t max_nums = 3;           // 最大失败任务重连次数
-    uint32_t max_waitTime = 0;      // 整个任务流程最多花费时间（单位：秒）（超时直接结束并返回）
-                                    //（0为不考虑任务花费时间，直到重连次数尝试完）
-};
-
 class HttpReqWays
 {
 public:
     // 控制全局默认的重试状态
     static void initHttpReqParams(const ReconnectCfg &cfg);
+    // 控制全局默认的超时配置
+    static void initHttpReqParams(const GlobalSetting &cfg);
     static void initHttpReqParams(const std::string &cfgPath);  // 配置项不多，引入配置文件增加程序复杂度，暂不实现
     
     //
