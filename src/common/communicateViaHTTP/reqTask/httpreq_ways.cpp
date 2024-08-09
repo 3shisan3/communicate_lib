@@ -373,9 +373,10 @@ void HttpReqWays::noteTaskStatus(WFHttpTask *task, HTTP_ERROR_CODE status)
 	{
 		std::string key_first = task->get_req()->get_request_uri();
 		std::string key_second = obtain_task_id(task);
-		HTTP_ERROR_CODE value = status;
+		HTTP_ERROR_CODE value_first = status;
+		std::string value_second = protocol::HttpUtil::decode_chunked_body(task->get_resp());
 
-		statusCallbackFunc({key_first, key_second, value});
+		statusCallbackFunc({key_first, key_second, value_first, value_second});
 	}
 }
 

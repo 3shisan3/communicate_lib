@@ -114,10 +114,10 @@ public:
      * @brief 设置每个任务执行后状态记录的处理方法
      *
      * @param[in] func              替换默认方法，外部输入
-     * @param[in] func->tuple       first为请求url，second为taskId, 两者合为key；third为value
+     * @param[in] func->tuple       first为请求url，second为taskId, 两者合为key；third为value, fourth为云端回复
      * 
      */
-    using noteTasksStatusCallback = std::function<void(const std::tuple<std::string, std::string, HTTP_ERROR_CODE> &)>;
+    using noteTasksStatusCallback = std::function<void(const std::tuple<std::string, std::string, HTTP_ERROR_CODE, std::string> &)>;
     static void setTaskStatusFunc(const noteTasksStatusCallback &func);
 
 protected:
