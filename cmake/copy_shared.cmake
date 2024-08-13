@@ -10,7 +10,7 @@ add_custom_command(
 )
 add_custom_command(
 	TARGET LINK_HEADERS PRE_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/interface/*/*.h ${SHARED_ROOT_DIR}/include
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/src/source/*/*.json ${SHARED_ROOT_DIR}/config
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/customized/interface/${cutom_dir_name}/*.h ${SHARED_ROOT_DIR}/include
+	# COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PROJECT_SOURCE_DIR}/customized/source/${cutom_dir_name}/*.json ${SHARED_ROOT_DIR}/config
 	DEPENDS ${SHARED_ROOT_DIR}/include AND ${SHARED_ROOT_DIR}/config
 )

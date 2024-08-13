@@ -45,7 +45,6 @@ set(SUBLIB_OUT_PATH ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/inner)
 
 # 设置自定义模块的存放位置
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(copy_shared)
 include(install_systemLib)
 
 # 查找OpenSSL库
@@ -93,11 +92,19 @@ endforeach()
 # 临时单独去除websocket相关的编译
 file(GLOB_RECURSE subSources "${PROJECT_SOURCE_DIR}/src/common/communicateViaWebSocket/*.cpp")
 list(REMOVE_ITEM SOURCES ${subSources})
+
+# set(cutom_dir_name "")	# 外部设置
+if(DEFINED cutom_dir_name)
+	file(GLOB_RECURSE CUSTOM_SOURCES "${PROJECT_SOURCE_DIR}/customized/interface/${cutom_dir_name}/*.cpp"
+									 "${PROJECT_SOURCE_DIR}/customized/source/${cutom_dir_name}/*.cpp"
+	)
+	include_directories(${PROJECT_SOURCE_DIR}/customized)
+	list(APPEND SOURCES "${CUSTOM_SOURCES}")
+
+	include(copy_shared)
+endif()
 message(STATUS "MAIN SOURCES: ${SOURCES}")
 
-# 设置排除链接编译的目录（混在主目录下的子目录）
-# add_subdirectory(${PROJECT_SOURCE_DIR}/src/interface/dpi_ota EXCLUDE_FROM_ALL)
-# add_subdirectory(${PROJECT_SOURCE_DIR}/src/source/dpi_ota EXCLUDE_FROM_ALL)
   
 # 添加头文件目录  
 include_directories(${OPENSSL_INCLUDE_DIRS_NOTE}
