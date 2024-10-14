@@ -14,7 +14,7 @@ message(STATUS "${PROJECT_NAME} BUILD_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
 # set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 option(RESUME_MOUDLE_MAKE "Enable HTTP resume ability Compile" ON)
-option(SERVER_MAKE "Enable HTTP server API Compile" OFF)
+option(SERVER_MAKE "Enable HTTP server API Compile" ON)
 option(EXPOSE_UNIT_HEADER "Expose base unit to the public" OFF)
 
 # 指定编译输出的库路径
@@ -36,16 +36,17 @@ if (RESUME_MOUDLE_MAKE)
 	list(APPEND SHARED_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/reqTask/special/specialsupply_req.h")
 	list(APPEND LINK_HEADER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/reqTask/special
 							  	 ${ROOT_PROJ_DIR}/src/utils)
-	file(GLOB SERVER_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/reqTask/special/*.cpp)
+	file(GLOB RESUME_MOUDLE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/reqTask/special/*.cpp)
 endif()
 if (SERVER_MAKE)
 	list(APPEND SHARED_HEADERS "")
 	list(APPEND LINK_HEADER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/server)
-	file(GLOB SERVER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/server/*.cpp")
+	file(GLOB_RECURSE SERVER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/server/*.cpp")
 endif()
 file(GLOB COMMON_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
 						 ${CMAKE_CURRENT_SOURCE_DIR}/reqTask/*.cpp) 
 list(APPEND SUB_SOURCES ${COMMON_SOURCES}
+						${RESUME_MOUDLE_SOURCES}
 						${SERVER_SOURCES})
 message(STATUS "${PROJECT_NAME} SUB_SOURCES: ${SUB_SOURCES}")
 
